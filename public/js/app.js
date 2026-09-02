@@ -695,7 +695,7 @@ const App = (() => {
       const url = URL.createObjectURL(file);
       previewBody.innerHTML = `
         <div class="upload-preview__pdf-wrap">
-          <iframe src="${url}" class="upload-preview__pdf" title="Vista previa PDF"></iframe>
+          <iframe src="${url}#toolbar=0&navpanes=0&scrollbar=1&view=FitH" class="upload-preview__pdf" title="Vista previa PDF"></iframe>
         </div>
         <div class="upload-preview__info">
           <div class="upload-preview__filename">${escapeHtml(fileName)}</div>
