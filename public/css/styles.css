@@ -731,6 +731,14 @@ textarea.form__input {
   margin-top: 16px;
 }
 
+/* --- Upload Layout (two-column) --- */
+.upload-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
 /* --- Upload Form --- */
 .upload-form {
   background: var(--color-surface);
@@ -738,7 +746,6 @@ textarea.form__input {
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--color-border);
   padding: 32px;
-  max-width: 600px;
 }
 
 .upload-form__file-area {
@@ -771,6 +778,113 @@ textarea.form__input {
   font-weight: 500;
   color: var(--color-primary);
   margin-top: 8px;
+}
+
+/* --- Upload Preview Panel --- */
+.upload-preview {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  position: sticky;
+  top: 28px;
+}
+
+.upload-preview__header {
+  padding: 16px 24px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  background: #faf8f5;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.upload-preview__body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 300px;
+  justify-content: center;
+}
+
+.upload-preview__empty {
+  text-align: center;
+  color: var(--color-text-light);
+}
+
+.upload-preview__empty svg {
+  margin-bottom: 12px;
+  opacity: 0.4;
+}
+
+.upload-preview__empty p {
+  font-size: 0.875rem;
+}
+
+.upload-preview__image-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.upload-preview__image {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: var(--radius);
+  object-fit: contain;
+  box-shadow: var(--shadow-sm);
+}
+
+.upload-preview__pdf-wrap {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.upload-preview__pdf {
+  width: 100%;
+  height: 450px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.upload-preview__file-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 24px;
+}
+
+.upload-preview__file-ext {
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.upload-preview__info {
+  text-align: center;
+  width: 100%;
+}
+
+.upload-preview__filename {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text);
+  word-break: break-all;
+  margin-bottom: 4px;
+}
+
+.upload-preview__filesize {
+  font-size: 0.8125rem;
+  color: var(--color-text-light);
 }
 
 /* --- Activity List --- */
@@ -1056,6 +1170,14 @@ textarea.form__input {
     background-size: 250% auto;
     background-position: center center;
   }
+
+  .upload-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .upload-preview {
+    position: static;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1082,6 +1204,10 @@ textarea.form__input {
 
   .modal__actions {
     flex-direction: column;
+  }
+
+  .upload-preview__pdf {
+    height: 300px;
   }
 }
 

@@ -583,28 +583,43 @@ const App = (() => {
     let html = `
       <a href="#" class="back-link" data-action="navigate" data-view="documents">&larr; Volver a documentos</a>
 
-      <div class="upload-form">
-        <h2 class="main__title" style="margin-bottom: 24px;">Subir Documento</h2>
-        <div id="upload-feedback"></div>
-        <form id="upload-form">
-          <div class="form__group">
-            <label class="form__label" for="upload-title">Titulo</label>
-            <input class="form__input" type="text" id="upload-title" required maxlength="255" placeholder="Titulo del documento">
-          </div>
-          <div class="form__group">
-            <label class="form__label" for="upload-description">Descripcion</label>
-            <textarea class="form__input" id="upload-description" rows="3" maxlength="1000" placeholder="Descripcion opcional del documento"></textarea>
-          </div>
-          <div class="form__group">
-            <label class="form__label">Archivo</label>
-            <div class="upload-form__file-area" id="file-drop-area">
-              <div class="upload-form__file-text">Haz clic o arrastra un archivo aqui</div>
-              <input type="file" id="upload-file" style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png">
-              <div class="upload-form__file-name" id="file-name"></div>
+      <div class="upload-layout">
+        <div class="upload-form">
+          <h2 class="main__title" style="margin-bottom: 24px;">Subir Documento</h2>
+          <div id="upload-feedback"></div>
+          <form id="upload-form">
+            <div class="form__group">
+              <label class="form__label" for="upload-title">Titulo</label>
+              <input class="form__input" type="text" id="upload-title" required maxlength="255" placeholder="Titulo del documento">
+            </div>
+            <div class="form__group">
+              <label class="form__label" for="upload-description">Descripcion</label>
+              <textarea class="form__input" id="upload-description" rows="3" maxlength="1000" placeholder="Descripcion opcional del documento"></textarea>
+            </div>
+            <div class="form__group">
+              <label class="form__label">Archivo</label>
+              <div class="upload-form__file-area" id="file-drop-area">
+                <div class="upload-form__file-text">Haz clic o arrastra un archivo aqui</div>
+                <input type="file" id="upload-file" style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.svg,.webp,.bmp">
+                <div class="upload-form__file-name" id="file-name"></div>
+              </div>
+            </div>
+            <button class="btn btn--primary btn--block" type="submit" id="upload-btn">Subir Documento</button>
+          </form>
+        </div>
+
+        <div class="upload-preview" id="upload-preview">
+          <div class="upload-preview__header">Vista previa</div>
+          <div class="upload-preview__body" id="preview-body">
+            <div class="upload-preview__empty">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+              <p>Selecciona un archivo para ver la vista previa</p>
             </div>
           </div>
-          <button class="btn btn--primary btn--block" type="submit" id="upload-btn">Subir Documento</button>
-        </form>
+        </div>
       </div>
     `;
 
@@ -632,17 +647,103 @@ const App = (() => {
       if (e.dataTransfer.files.length > 0) {
         fileInput.files = e.dataTransfer.files;
         fileNameEl.textContent = e.dataTransfer.files[0].name;
+        showFilePreview(e.dataTransfer.files[0]);
       }
     });
 
     fileInput.addEventListener('change', () => {
       if (fileInput.files.length > 0) {
         fileNameEl.textContent = fileInput.files[0].name;
+        showFilePreview(fileInput.files[0]);
       }
     });
 
     // Form submit
     $('#upload-form').addEventListener('submit', handleUpload);
+  }
+
+  function showFilePreview(file) {
+    const previewBody = $('#preview-body');
+    if (!previewBody) return;
+
+    const fileName = file.name;
+    const fileSize = formatFileSize(file.size);
+    const fileExt = fileName.split('.').pop().toLowerCase();
+
+    // Image types
+    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp'];
+    // PDF
+    const pdfExts = ['pdf'];
+    // Office docs (no native preview)
+    const officeExts = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+
+    if (imageExts.includes(fileExt)) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        previewBody.innerHTML = `
+          <div class="upload-preview__image-wrap">
+            <img src="${e.target.result}" alt="${escapeHtml(fileName)}" class="upload-preview__image">
+          </div>
+          <div class="upload-preview__info">
+            <div class="upload-preview__filename">${escapeHtml(fileName)}</div>
+            <div class="upload-preview__filesize">${fileSize}</div>
+          </div>
+        `;
+      };
+      reader.readAsDataURL(file);
+    } else if (pdfExts.includes(fileExt)) {
+      const url = URL.createObjectURL(file);
+      previewBody.innerHTML = `
+        <div class="upload-preview__pdf-wrap">
+          <iframe src="${url}" class="upload-preview__pdf" title="Vista previa PDF"></iframe>
+        </div>
+        <div class="upload-preview__info">
+          <div class="upload-preview__filename">${escapeHtml(fileName)}</div>
+          <div class="upload-preview__filesize">${fileSize}</div>
+        </div>
+      `;
+    } else {
+      // Generic file icon for office docs and other types
+      let iconLabel = fileExt.toUpperCase();
+      let iconColor = 'var(--color-text-light)';
+
+      if (officeExts.includes(fileExt)) {
+        if (fileExt === 'doc' || fileExt === 'docx') {
+          iconColor = '#2B579A';
+          iconLabel = 'WORD';
+        } else if (fileExt === 'xls' || fileExt === 'xlsx') {
+          iconColor = '#217346';
+          iconLabel = 'EXCEL';
+        } else if (fileExt === 'ppt' || fileExt === 'pptx') {
+          iconColor = '#D24726';
+          iconLabel = 'PPT';
+        }
+      }
+
+      previewBody.innerHTML = `
+        <div class="upload-preview__file-icon">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+          </svg>
+          <span class="upload-preview__file-ext" style="color: ${iconColor}">${iconLabel}</span>
+        </div>
+        <div class="upload-preview__info">
+          <div class="upload-preview__filename">${escapeHtml(fileName)}</div>
+          <div class="upload-preview__filesize">${fileSize}</div>
+        </div>
+      `;
+    }
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
   async function handleUpload(e) {
