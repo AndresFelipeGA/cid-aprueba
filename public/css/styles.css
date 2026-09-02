@@ -168,10 +168,35 @@ img {
 /* --- Login Page --- */
 .login {
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
   min-height: 100vh;
-  padding: 20px;
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+  background-color: #fcf9f3;
+  background-image: url('../assets/fondo-slider-la-cid-textura.jpg');
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+/* Decorative SVG figures overlay */
+.login::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #FFFFFF;
+  background-image: url('../assets/fondos-logo-figuras-la-cid-38.svg');
+  background-size: 125% auto;
+  background-position: center center;
+  background-repeat: no-repeat;
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .login__card {
@@ -181,6 +206,8 @@ img {
   padding: 48px 40px;
   width: 100%;
   max-width: 400px;
+  position: relative;
+  z-index: 1;
 }
 
 .login__brand {
@@ -195,13 +222,27 @@ img {
   margin: 0 auto 8px;
 }
 
-.login__subtitle {
-  font-size: 1rem;
-  color: var(--color-text-light);
-  font-weight: 400;
-  margin-top: 4px;
-  letter-spacing: 3px;
-  text-transform: uppercase;
+/* Animated heart decoration */
+.login__corazon {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  top: 15%;
+  left: 20%;
+  z-index: 1;
+  pointer-events: none;
+  animation: login-pulse 3s ease-in-out infinite;
+}
+
+@keyframes login-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
 }
 
 .login__error {
@@ -283,14 +324,6 @@ textarea.form__input {
   max-width: 120px;
   height: auto;
   margin: 0 auto 4px;
-}
-
-.sidebar__logo-sub {
-  font-size: 0.75rem;
-  color: var(--color-text-light);
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  font-weight: 400;
 }
 
 .sidebar__nav {
@@ -970,6 +1003,13 @@ textarea.form__input {
 
   .login__card {
     padding: 32px 24px;
+  }
+
+  .login__corazon {
+    width: 50px;
+    height: 50px;
+    top: 5%;
+    left: 10%;
   }
 }
 
