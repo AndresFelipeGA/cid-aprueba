@@ -10,7 +10,6 @@
 
   <!-- ========== Login View ========== -->
   <div id="login-view" class="login hidden">
-    <img src="assets/corafijos-02.svg" alt="" class="login__corazon" aria-hidden="true">
     <div class="login__card">
       <div class="login__brand">
         <img src="assets/logo-LA-CID.svg" alt="CID - Corporación Infancia y Desarrollo" class="login__logo-img">
@@ -51,6 +50,9 @@
         <a href="#" class="sidebar__link" data-action="navigate" data-view="upload">
           Subir Documento
         </a>
+        <a href="#" class="sidebar__link" data-action="navigate" data-view="profile">
+          Perfil
+        </a>
       </nav>
     </aside>
 
@@ -83,6 +85,26 @@
       </div>
     </main>
 
+  </div>
+
+  <!-- ========== Email Registration Modal ========== -->
+  <div id="email-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="email-modal-title">
+    <div class="modal__backdrop"></div>
+    <div class="modal__content">
+      <h2 class="modal__title" id="email-modal-title">Registra tu correo electronico</h2>
+      <p class="modal__text">Para mejorar la comunicacion, por favor registra tu correo electronico.</p>
+      <div id="email-modal-feedback"></div>
+      <form id="email-modal-form">
+        <div class="form__group">
+          <label class="form__label" for="email-modal-input">Correo electronico</label>
+          <input class="form__input" type="email" id="email-modal-input" required placeholder="ejemplo@correo.com">
+        </div>
+        <div class="modal__actions">
+          <button class="btn btn--primary" type="submit" id="email-modal-save">Guardar</button>
+          <button class="btn btn--outline" type="button" id="email-modal-skip">Omitir</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <!-- Scripts -->

@@ -66,6 +66,36 @@ const authController = {
       message: null,
     });
   },
+
+  updateProfile(req, res) {
+    const userId = req.user.id;
+    const { email, full_name } = req.body;
+
+    // Check if email is already taken by another user
+    if (email) {
+      const existing = User.findByEmail ? User.findByEmail(email) : null;
+      if (existing && existing.id !== userId) {
+        throw new AppError('Email already in use', 409, 'EMAIL_TAKEN');
+      }
+    }
+
+    const updatedUser = User.update(userId, {
+      email: email || undefined,
+      fullName: full_name || undefined,
+    });
+
+    if (!updatedUser) {
+      throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+    }
+
+    logger.info(`User profile updated: userId=${userId}`);
+
+    res.json({
+      success: true,
+      data: { user: updatedUser },
+      message: 'Profile updated successfully',
+    });
+  },
 };
 
 module.exports = authController;

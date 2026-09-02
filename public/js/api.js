@@ -128,6 +128,12 @@ const API = (() => {
     return request('GET', `/dashboard/recent?limit=${limit}`);
   }
 
+  // --- Profile ---
+
+  async function updateProfile(data) {
+    return request('PUT', '/auth/profile', data);
+  }
+
   // --- Public API ---
 
   return {
@@ -136,6 +142,7 @@ const API = (() => {
     removeToken,
     login,
     getMe,
+    updateProfile,
     getDocuments,
     getDocument,
     uploadDocument,

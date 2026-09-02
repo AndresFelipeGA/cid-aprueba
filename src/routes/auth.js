@@ -25,4 +25,16 @@ router.get(
   asyncHandler(authController.me),
 );
 
+// PUT /api/auth/profile
+router.put(
+  '/profile',
+  authenticate,
+  [
+    body('email').optional().isEmail().withMessage('Invalid email format').normalizeEmail(),
+    body('full_name').optional().trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
+  ],
+  validate,
+  asyncHandler(authController.updateProfile),
+);
+
 module.exports = router;

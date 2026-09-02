@@ -222,29 +222,6 @@ img {
   margin: 0 auto 8px;
 }
 
-/* Animated heart decoration */
-.login__corazon {
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  top: 15%;
-  left: 20%;
-  z-index: 1;
-  pointer-events: none;
-  animation: login-pulse 3s ease-in-out infinite;
-}
-
-@keyframes login-pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 0.85;
-  }
-  50% {
-    transform: scale(1.08);
-    opacity: 1;
-  }
-}
-
 .login__error {
   background-color: #fef2f2;
   border: 1px solid #fecaca;
@@ -942,6 +919,86 @@ textarea.form__input {
   color: var(--color-text);
 }
 
+/* --- Modal --- */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.modal__backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal__content {
+  position: relative;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 32px;
+  width: 100%;
+  max-width: 420px;
+  z-index: 1;
+}
+
+.modal__title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 8px;
+}
+
+.modal__text {
+  font-size: 0.875rem;
+  color: var(--color-text-light);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.modal__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* --- Profile Page --- */
+.profile {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.profile__card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
+  padding: 32px;
+  width: 100%;
+  max-width: 500px;
+}
+
+.profile__title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
 /* --- Responsive --- */
 @media (max-width: 768px) {
   :root {
@@ -994,6 +1051,11 @@ textarea.form__input {
   .table td {
     padding: 10px 12px;
   }
+
+  .login::before {
+    background-size: 250% auto;
+    background-position: center center;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1001,15 +1063,25 @@ textarea.form__input {
     grid-template-columns: 1fr;
   }
 
+  .login::before {
+    background-size: 350% auto;
+    background-position: center center;
+  }
+
   .login__card {
     padding: 32px 24px;
   }
 
-  .login__corazon {
-    width: 50px;
-    height: 50px;
-    top: 5%;
-    left: 10%;
+  .login__logo-img {
+    max-width: 140px;
+  }
+
+  .modal__content {
+    padding: 24px 20px;
+  }
+
+  .modal__actions {
+    flex-direction: column;
   }
 }
 

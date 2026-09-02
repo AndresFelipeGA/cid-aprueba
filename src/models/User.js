@@ -15,6 +15,10 @@ const User = {
     return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
   },
 
+  findByEmail(email) {
+    return db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  },
+
   findAll() {
     return db.prepare(
       'SELECT id, username, email, full_name, role_level, is_active, created_at, updated_at FROM users WHERE is_active = 1 ORDER BY role_level ASC'
@@ -64,6 +68,11 @@ const User = {
 
     db.prepare(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`).run(...values);
 
+    return User.findById(id);
+  },
+
+  updatePassword(id, passwordHash) {
+    db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").run(passwordHash, id);
     return User.findById(id);
   },
 };

@@ -112,6 +112,7 @@ const App = (() => {
       documents: 'Documentos',
       'document-detail': 'Detalle del Documento',
       upload: 'Subir Documento',
+      profile: 'Mi Perfil',
     };
     $('#header-title').textContent = titles[view] || '';
 
@@ -132,6 +133,9 @@ const App = (() => {
       break;
     case 'upload':
       renderUploadForm(main);
+      break;
+    case 'profile':
+      renderProfile(main);
       break;
     default:
       renderDashboard(main);
@@ -178,6 +182,68 @@ const App = (() => {
     }
 
     navigate('dashboard');
+
+    // Check if user has no email and show modal
+    checkEmailRegistration();
+  }
+
+  function checkEmailRegistration() {
+    if (!currentUser) return;
+    // If user has no email or email is empty/placeholder
+    const email = currentUser.email || '';
+    if (!email || email.endsWith('@cid.org.co')) {
+      showEmailModal();
+    }
+  }
+
+  function showEmailModal() {
+    const modal = $('#email-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      const input = $('#email-modal-input');
+      if (input) input.focus();
+    }
+  }
+
+  function hideEmailModal() {
+    const modal = $('#email-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      const feedback = $('#email-modal-feedback');
+      if (feedback) feedback.innerHTML = '';
+      const input = $('#email-modal-input');
+      if (input) input.value = '';
+    }
+  }
+
+  async function handleEmailModalSave(e) {
+    e.preventDefault();
+    const email = $('#email-modal-input').value.trim();
+    const feedback = $('#email-modal-feedback');
+    const btn = $('#email-modal-save');
+
+    if (!email) {
+      feedback.innerHTML = '<div class="alert alert--error">Ingrese un correo electronico valido</div>';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+
+    try {
+      const result = await API.updateProfile({ email });
+      currentUser = result.data.user;
+      // Update header user info
+      if (currentUser) {
+        $('#user-name').textContent = currentUser.full_name;
+      }
+      hideEmailModal();
+    } catch (err) {
+      feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al guardar el correo')}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Guardar';
+    }
   }
 
   async function handleLogin(e) {
@@ -620,6 +686,89 @@ const App = (() => {
     }
   }
 
+  // --- Profile View ---
+
+  function renderProfile(container) {
+    const user = currentUser;
+    if (!user) {
+      showError(container, 'No se pudo cargar la informacion del usuario');
+      return;
+    }
+
+    let html = `
+      <div class="profile">
+        <div class="profile__card">
+          <h2 class="profile__title">Informacion del Usuario</h2>
+          <div id="profile-feedback"></div>
+          <form id="profile-form">
+            <div class="form__group">
+              <label class="form__label" for="profile-username">Usuario</label>
+              <input class="form__input" type="text" id="profile-username" value="${escapeHtml(user.username)}" disabled>
+            </div>
+            <div class="form__group">
+              <label class="form__label" for="profile-fullname">Nombre completo</label>
+              <input class="form__input" type="text" id="profile-fullname" value="${escapeHtml(user.full_name)}" required minlength="2" placeholder="Nombre completo">
+            </div>
+            <div class="form__group">
+              <label class="form__label" for="profile-email">Correo electronico</label>
+              <input class="form__input" type="email" id="profile-email" value="${escapeHtml(user.email || '')}" required placeholder="ejemplo@correo.com">
+            </div>
+            <div class="form__group">
+              <label class="form__label">Nivel de rol</label>
+              <input class="form__input" type="text" value="Nivel ${user.role_level}" disabled>
+            </div>
+            <button class="btn btn--primary btn--block" type="submit" id="profile-save-btn">Guardar cambios</button>
+          </form>
+        </div>
+      </div>
+    `;
+
+    container.innerHTML = html;
+
+    // Attach form submit handler
+    $('#profile-form').addEventListener('submit', handleProfileSave);
+  }
+
+  async function handleProfileSave(e) {
+    e.preventDefault();
+
+    const fullName = $('#profile-fullname').value.trim();
+    const email = $('#profile-email').value.trim();
+    const btn = $('#profile-save-btn');
+    const feedback = $('#profile-feedback');
+
+    if (!fullName || fullName.length < 2) {
+      feedback.innerHTML = '<div class="alert alert--error">El nombre debe tener al menos 2 caracteres</div>';
+      return;
+    }
+
+    if (!email) {
+      feedback.innerHTML = '<div class="alert alert--error">Ingrese un correo electronico valido</div>';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+    feedback.innerHTML = '';
+
+    try {
+      const result = await API.updateProfile({ email, full_name: fullName });
+      currentUser = result.data.user;
+
+      // Update header
+      if (currentUser) {
+        $('#user-name').textContent = currentUser.full_name;
+      }
+
+      feedback.innerHTML = '<div class="alert alert--success">Perfil actualizado exitosamente</div>';
+    } catch (err) {
+      feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al actualizar el perfil')}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Guardar cambios';
+    }
+  }
+
   // --- Approval Actions ---
 
   async function handleApprove(docId) {
@@ -718,6 +867,22 @@ const App = (() => {
 
     // Overlay click closes sidebar
     $('.overlay').addEventListener('click', closeMobileSidebar);
+
+    // Email modal
+    const emailForm = $('#email-modal-form');
+    if (emailForm) {
+      emailForm.addEventListener('submit', handleEmailModalSave);
+    }
+
+    const emailSkip = $('#email-modal-skip');
+    if (emailSkip) {
+      emailSkip.addEventListener('click', hideEmailModal);
+    }
+
+    const emailBackdrop = document.querySelector('#email-modal .modal__backdrop');
+    if (emailBackdrop) {
+      emailBackdrop.addEventListener('click', hideEmailModal);
+    }
 
     // Sidebar navigation
     document.addEventListener('click', (e) => {
