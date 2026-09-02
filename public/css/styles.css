@@ -188,12 +188,11 @@ img {
   margin-bottom: 32px;
 }
 
-.login__logo {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: var(--color-primary);
-  letter-spacing: 2px;
-  line-height: 1;
+.login__logo-img {
+  display: block;
+  max-width: 180px;
+  height: auto;
+  margin: 0 auto 8px;
 }
 
 .login__subtitle {
@@ -279,12 +278,11 @@ textarea.form__input {
   border-bottom: 1px solid var(--color-border);
 }
 
-.sidebar__logo {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--color-primary);
-  letter-spacing: 2px;
-  line-height: 1;
+.sidebar__logo-img {
+  display: block;
+  max-width: 120px;
+  height: auto;
+  margin: 0 auto 4px;
 }
 
 .sidebar__logo-sub {
