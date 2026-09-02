@@ -1,0 +1,71 @@
+const db = require('../config/database');
+
+const User = {
+  findById(id) {
+    return db.prepare(
+      'SELECT id, username, email, full_name, role_level, is_active, created_at, updated_at FROM users WHERE id = ?'
+    ).get(id);
+  },
+
+  findByIdWithPassword(id) {
+    return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  },
+
+  findByUsername(username) {
+    return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  },
+
+  findAll() {
+    return db.prepare(
+      'SELECT id, username, email, full_name, role_level, is_active, created_at, updated_at FROM users WHERE is_active = 1 ORDER BY role_level ASC'
+    ).all();
+  },
+
+  findByRoleLevel(roleLevel) {
+    return db.prepare(
+      'SELECT id, username, email, full_name, role_level, is_active, created_at, updated_at FROM users WHERE role_level = ? AND is_active = 1'
+    ).all(roleLevel);
+  },
+
+  create({ username, email, passwordHash, fullName, roleLevel }) {
+    const result = db.prepare(`
+      INSERT INTO users (username, email, password_hash, full_name, role_level)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(username, email, passwordHash, fullName, roleLevel);
+
+    return User.findById(result.lastInsertRowid);
+  },
+
+  update(id, { fullName, email, roleLevel, isActive }) {
+    const fields = [];
+    const values = [];
+
+    if (fullName !== undefined) {
+      fields.push('full_name = ?');
+      values.push(fullName);
+    }
+    if (email !== undefined) {
+      fields.push('email = ?');
+      values.push(email);
+    }
+    if (roleLevel !== undefined) {
+      fields.push('role_level = ?');
+      values.push(roleLevel);
+    }
+    if (isActive !== undefined) {
+      fields.push('is_active = ?');
+      values.push(isActive);
+    }
+
+    if (fields.length === 0) return User.findById(id);
+
+    fields.push("updated_at = datetime('now')");
+    values.push(id);
+
+    db.prepare(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+
+    return User.findById(id);
+  },
+};
+
+module.exports = User;
