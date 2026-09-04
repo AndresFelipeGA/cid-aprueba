@@ -81,11 +81,11 @@ class AppError extends Error {
 
 ```javascript
 // Throw operational errors — they will be caught by the error handler
-if (!document) {
-  throw new AppError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
+if (!requisition) {
+  throw new AppError('Requisition not found', 404, 'REQUISITION_NOT_FOUND');
 }
 
-if (user.role_level !== document.current_approval_level) {
+if (user.role_level !== requisition.current_approval_level) {
   throw new AppError('Not authorized to approve at this level', 403, 'FORBIDDEN');
 }
 ```
@@ -137,14 +137,14 @@ const asyncHandler = (fn) => (req, res, next) => {
 - Validate file uploads: check MIME type, enforce size limits, reject executable files
 
 ```javascript
-// Example: document upload validation
-router.post('/documents',
+// Example: requisition upload validation
+router.post('/requisitions',
   authenticate,
   upload.single('file'),
   body('title').trim().notEmpty().isLength({ max: 255 }),
   body('description').optional().trim().isLength({ max: 1000 }),
   validate,
-  documentController.upload,
+  requisitionController.create,
 );
 ```
 
@@ -154,10 +154,10 @@ router.post('/documents',
 
 ```javascript
 // CORRECT
-const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+const req = db.prepare('SELECT * FROM requisitions WHERE id = ?').get(id);
 
 // NEVER DO THIS
-const doc = db.prepare(`SELECT * FROM documents WHERE id = ${id}`).get();
+const req = db.prepare(`SELECT * FROM requisitions WHERE id = ${id}`).get();
 ```
 
 ### Authentication Security
@@ -203,7 +203,7 @@ All API responses follow a consistent JSON structure:
 {
   "success": true,
   "data": { },
-  "message": "Document uploaded successfully"
+  "message": "Requisition uploaded successfully"
 }
 ```
 
@@ -212,8 +212,8 @@ All API responses follow a consistent JSON structure:
 ```json
 {
   "success": false,
-  "error": "DOCUMENT_NOT_FOUND",
-  "message": "The requested document does not exist"
+  "error": "REQUISITION_NOT_FOUND",
+  "message": "The requested requisition does not exist"
 }
 ```
 
@@ -282,17 +282,17 @@ const AppError = require('../utils/AppError');
 Models are plain objects (not classes) that export functions. Each function receives parameters and interacts with the database:
 
 ```javascript
-// src/models/Document.js
+// src/models/Requisition.js
 const db = require('../config/database');
 
-const Document = {
+const Requisition = {
   findById(id) {
-    return db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+    return db.prepare('SELECT * FROM requisitions WHERE id = ?').get(id);
   },
 
   findByStatus(status, limit = 20, offset = 0) {
     return db.prepare(
-      'SELECT * FROM documents WHERE status = ? LIMIT ? OFFSET ?'
+      'SELECT * FROM requisitions WHERE status = ? LIMIT ? OFFSET ?'
     ).all(status, limit, offset);
   },
 
@@ -301,7 +301,7 @@ const Document = {
   },
 };
 
-module.exports = Document;
+module.exports = Requisition;
 ```
 
 ---
@@ -381,14 +381,14 @@ Use a simple [`logger`](src/utils/logger.js) utility that wraps `console` method
 |-------|-------|
 | `error` | Unrecoverable errors, failed operations |
 | `warn` | Recoverable issues, deprecation notices |
-| `info` | Significant events: server start, user login, document approved |
+| `info` | Significant events: server start, user login, requisition approved |
 | `debug` | Detailed diagnostic info (disabled in production) |
 
 ### What to Log
 
 - Server startup with port and environment
 - Every authentication attempt (success and failure, without passwords)
-- Every approval/rejection action with document ID, user ID, and level
+- Every approval/rejection action with requisition ID, user ID, and level
 - All errors with stack traces
 - Database initialization and migration events
 
@@ -404,7 +404,7 @@ Use a simple [`logger`](src/utils/logger.js) utility that wraps `console` method
 ```
 [2026-09-02T13:45:00.000Z] [INFO] Server started on port 3000 (development)
 [2026-09-02T13:45:12.000Z] [INFO] User login: userId=3, username=coordinador
-[2026-09-02T13:45:30.000Z] [INFO] Document approved: docId=15, level=2, userId=5
+[2026-09-02T13:45:30.000Z] [INFO] Requisition approved: reqId=15, level=2, userId=5
 [2026-09-02T13:45:31.000Z] [ERROR] Database error: SQLITE_CONSTRAINT ...
 ```
 
@@ -425,14 +425,14 @@ Use a lightweight testing setup appropriate for the project scale:
 ```
 tests/
 ├── auth.test.js          # Login, registration, token validation
-├── documents.test.js     # Upload, list, detail, download
+├── requisitions.test.js  # Upload, list, detail, download
 └── approvals.test.js     # Approve, reject, workflow progression
 ```
 
 ### Testing Priorities
 
 1. **Approval workflow logic** — The core business value. Test the full chain: upload → approve through all 6 levels → final status. Test rejection at each level.
-2. **Authorization rules** — Verify that users cannot approve at wrong levels, cannot access restricted documents.
+2. **Authorization rules** — Verify that users cannot approve at wrong levels, cannot access restricted requisitions.
 3. **Input validation** — Confirm that malformed requests are rejected with proper error codes.
 4. **Authentication** — Token generation, expiry, invalid token handling.
 
@@ -450,7 +450,7 @@ const assert = require('node:assert');
 const request = require('supertest');
 const app = require('../server');
 
-describe('POST /api/approvals/:documentId/approve', () => {
+describe('POST /api/approvals/:requisitionId/approve', () => {
   it('should reject if user role does not match current approval level', async () => {
     const res = await request(app)
       .post('/api/approvals/1/approve')

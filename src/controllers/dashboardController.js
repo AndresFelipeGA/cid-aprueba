@@ -1,10 +1,10 @@
-const Document = require('../models/Document');
+const Requisition = require('../models/Requisition');
 const ApprovalLog = require('../models/ApprovalLog');
 
 const dashboardController = {
   getStats(req, res) {
-    const statusCounts = Document.countByStatus();
-    const levelCounts = Document.countByLevel();
+    const statusCounts = Requisition.countByStatus();
+    const levelCounts = Requisition.countByLevel();
     const recentActivity = ApprovalLog.findRecent({ limit: 10 });
 
     res.json({
@@ -30,7 +30,7 @@ const dashboardController = {
     const limit = parseInt(req.query.limit, 10) || 20;
     const offset = (page - 1) * limit;
 
-    const { items, total } = Document.findPendingForLevel(userRoleLevel, { limit, offset });
+    const { items, total } = Requisition.findPendingForLevel(userRoleLevel, { limit, offset });
 
     res.json({
       success: true,
@@ -46,7 +46,7 @@ const dashboardController = {
 
   getRecent(req, res) {
     const limit = parseInt(req.query.limit, 10) || 10;
-    const items = Document.findRecent({ limit });
+    const items = Requisition.findRecent({ limit });
 
     res.json({
       success: true,

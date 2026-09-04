@@ -26,12 +26,19 @@ const authController = {
       throw new AppError('Invalid username or password', 401, 'INVALID_CREDENTIALS');
     }
 
+    const tokenPayload = {
+      sub: user.id,
+      username: user.username,
+      role_level: user.role_level,
+    };
+
+    // Include territory in token if the user has one
+    if (user.territory) {
+      tokenPayload.territory = user.territory;
+    }
+
     const token = jwt.sign(
-      {
-        sub: user.id,
-        username: user.username,
-        role_level: user.role_level,
-      },
+      tokenPayload,
       authConfig.jwtSecret,
       { expiresIn: authConfig.jwtExpiresIn },
     );
@@ -48,6 +55,7 @@ const authController = {
           email: user.email,
           full_name: user.full_name,
           role_level: user.role_level,
+          territory: user.territory || null,
         },
       },
       message: 'Login successful',

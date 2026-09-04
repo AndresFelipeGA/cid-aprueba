@@ -86,32 +86,32 @@ const API = (() => {
     return request('GET', '/auth/me');
   }
 
-  // --- Documents ---
+  // --- Requisitions ---
 
-  async function getDocuments(page = 1, limit = 50) {
-    return request('GET', `/documents?page=${page}&limit=${limit}`);
+  async function getRequisitions(page = 1, limit = 50) {
+    return request('GET', `/requisitions?page=${page}&limit=${limit}`);
   }
 
-  async function getDocument(id) {
-    return request('GET', `/documents/${id}`);
+  async function getRequisition(id) {
+    return request('GET', `/requisitions/${id}`);
   }
 
-  async function uploadDocument(formData) {
-    return request('POST', '/documents', formData, true);
+  async function createRequisition(formData) {
+    return request('POST', '/requisitions', formData, true);
   }
 
-  async function downloadDocument(id) {
-    return request('GET', `/documents/${id}/download`);
+  async function downloadRequisition(id) {
+    return request('GET', `/requisitions/${id}/download`);
   }
 
   // --- Approvals ---
 
-  async function approveDocument(documentId, comments) {
-    return request('POST', `/approvals/${documentId}/approve`, { comments: comments || '' });
+  async function approveRequisition(requisitionId, comments) {
+    return request('POST', `/approvals/${requisitionId}/approve`, { comments: comments || '' });
   }
 
-  async function rejectDocument(documentId, comments) {
-    return request('POST', `/approvals/${documentId}/reject`, { comments });
+  async function rejectRequisition(requisitionId, comments) {
+    return request('POST', `/approvals/${requisitionId}/reject`, { comments });
   }
 
   // --- Dashboard ---
@@ -143,12 +143,12 @@ const API = (() => {
     login,
     getMe,
     updateProfile,
-    getDocuments,
-    getDocument,
-    uploadDocument,
-    downloadDocument,
-    approveDocument,
-    rejectDocument,
+    getRequisitions,
+    getRequisition,
+    createRequisition,
+    downloadRequisition,
+    approveRequisition,
+    rejectRequisition,
     getDashboardStats,
     getPending,
     getRecent,

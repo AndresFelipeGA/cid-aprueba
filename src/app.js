@@ -11,7 +11,7 @@ const config = require('./config/env');
 
 // Import routes
 const authRoutes = require('./routes/auth');
-const documentRoutes = require('./routes/documents');
+const requisitionRoutes = require('./routes/requisitions');
 const approvalRoutes = require('./routes/approvals');
 const dashboardRoutes = require('./routes/dashboard');
 
@@ -44,7 +44,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // API routes
 app.use('/api/auth', authRoutes);
-app.use('/api/documents', documentRoutes);
+app.use('/api/requisitions', requisitionRoutes);
 app.use('/api/approvals', approvalRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 

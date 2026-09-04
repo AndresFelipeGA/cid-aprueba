@@ -550,14 +550,14 @@ textarea.form__input {
   color: var(--color-text-light);
 }
 
-/* --- Document Detail --- */
-.doc-detail {
+/* --- Requisition Detail --- */
+.req-detail {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
 }
 
-.doc-detail__info {
+.req-detail__info {
   background: var(--color-surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
@@ -565,18 +565,18 @@ textarea.form__input {
   padding: 24px;
 }
 
-.doc-detail__title {
+.req-detail__title {
   font-size: 1.25rem;
   font-weight: 600;
   margin-bottom: 16px;
   color: var(--color-text);
 }
 
-.doc-detail__meta {
+.req-detail__meta {
   list-style: none;
 }
 
-.doc-detail__meta li {
+.req-detail__meta li {
   display: flex;
   justify-content: space-between;
   padding: 8px 0;
@@ -584,21 +584,21 @@ textarea.form__input {
   font-size: 0.875rem;
 }
 
-.doc-detail__meta li:last-child {
+.req-detail__meta li:last-child {
   border-bottom: none;
 }
 
-.doc-detail__meta-label {
+.req-detail__meta-label {
   color: var(--color-text-light);
   font-weight: 400;
 }
 
-.doc-detail__meta-value {
+.req-detail__meta-value {
   font-weight: 500;
   color: var(--color-text);
 }
 
-.doc-detail__description {
+.req-detail__description {
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid var(--color-border);
@@ -607,7 +607,7 @@ textarea.form__input {
   line-height: 1.6;
 }
 
-.doc-detail__actions {
+.req-detail__actions {
   margin-top: 20px;
   display: flex;
   gap: 10px;
@@ -1153,7 +1153,7 @@ textarea.form__input {
     padding: 20px 16px;
   }
 
-  .doc-detail {
+  .req-detail {
     grid-template-columns: 1fr;
   }
 

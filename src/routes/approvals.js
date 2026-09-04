@@ -7,32 +7,32 @@ const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
 
-// POST /api/approvals/:documentId/approve
+// POST /api/approvals/:requisitionId/approve
 router.post(
-  '/:documentId/approve',
+  '/:requisitionId/approve',
   authenticate,
   [
-    body('comments').optional().trim().isLength({ max: 1000 }).withMessage('Comments must be at most 1000 characters'),
+    body('comments').optional().trim().isLength({ max: 1000 }).withMessage('Los comentarios deben tener máximo 1000 caracteres'),
   ],
   validate,
   asyncHandler(approvalController.approve),
 );
 
-// POST /api/approvals/:documentId/reject
+// POST /api/approvals/:requisitionId/reject
 router.post(
-  '/:documentId/reject',
+  '/:requisitionId/reject',
   authenticate,
   [
-    body('comments').trim().notEmpty().withMessage('Comments are required when rejecting a document')
-      .isLength({ max: 1000 }).withMessage('Comments must be at most 1000 characters'),
+    body('comments').trim().notEmpty().withMessage('Los comentarios son requeridos al rechazar una requisición')
+      .isLength({ max: 1000 }).withMessage('Los comentarios deben tener máximo 1000 caracteres'),
   ],
   validate,
   asyncHandler(approvalController.reject),
 );
 
-// GET /api/approvals/:documentId/history
+// GET /api/approvals/:requisitionId/history
 router.get(
-  '/:documentId/history',
+  '/:requisitionId/history',
   authenticate,
   asyncHandler(approvalController.history),
 );

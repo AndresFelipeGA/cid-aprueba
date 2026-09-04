@@ -1,19 +1,19 @@
 const path = require('path');
 const fs = require('fs');
-const Document = require('../models/Document');
+const Requisition = require('../models/Requisition');
 const ApprovalStep = require('../models/ApprovalStep');
 const ApprovalLog = require('../models/ApprovalLog');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 
-const documentController = {
+const requisitionController = {
   list(req, res) {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 20;
     const offset = (page - 1) * limit;
     const userRoleLevel = req.user.role_level;
 
-    const { items, total } = Document.findAll({ limit, offset, userRoleLevel });
+    const { items, total } = Requisition.findAll({ limit, offset, userRoleLevel });
 
     res.json({
       success: true,
@@ -29,27 +29,32 @@ const documentController = {
 
   getById(req, res) {
     const { id } = req.params;
-    const document = Document.getWithApprovals(id);
+    const requisition = Requisition.getWithApprovals(id);
 
-    if (!document) {
-      throw new AppError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
+    if (!requisition) {
+      throw new AppError('Requisición no encontrada', 404, 'REQUISITION_NOT_FOUND');
     }
 
     res.json({
       success: true,
-      data: { document },
+      data: { requisition },
       message: null,
     });
   },
 
   create(req, res) {
+    // Only Coordinadores de Territorio (role_level 1) can create requisitions
+    if (req.user.role_level !== 1) {
+      throw new AppError('Solo los Coordinadores de Territorio pueden crear requisiciones', 403, 'FORBIDDEN');
+    }
+
     const { title, description } = req.body;
 
     if (!req.file) {
-      throw new AppError('File is required', 400, 'FILE_REQUIRED');
+      throw new AppError('El archivo es requerido', 400, 'FILE_REQUIRED');
     }
 
-    const document = Document.create({
+    const requisition = Requisition.create({
       title,
       description: description || null,
       filePath: req.file.path,
@@ -58,25 +63,25 @@ const documentController = {
     });
 
     // Create all 6 approval steps
-    ApprovalStep.createAll(document.id);
+    ApprovalStep.createAll(requisition.id);
 
     // Log the upload action
     ApprovalLog.create({
-      documentId: document.id,
+      requisitionId: requisition.id,
       approvalStepId: null,
       userId: req.user.id,
       action: 'uploaded',
       comments: null,
     });
 
-    logger.info(`Document uploaded: docId=${document.id}, userId=${req.user.id}, title="${title}"`);
+    logger.info(`Requisition uploaded: reqId=${requisition.id}, userId=${req.user.id}, title="${title}"`);
 
-    const fullDocument = Document.getWithApprovals(document.id);
+    const fullRequisition = Requisition.getWithApprovals(requisition.id);
 
     res.status(201).json({
       success: true,
-      data: { document: fullDocument },
-      message: 'Document uploaded successfully',
+      data: { requisition: fullRequisition },
+      message: 'Requisición creada exitosamente',
     });
   },
 
@@ -86,7 +91,7 @@ const documentController = {
 
     if (!validStatuses.includes(status)) {
       throw new AppError(
-        `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+        `Estado inválido. Debe ser uno de: ${validStatuses.join(', ')}`,
         400,
         'INVALID_STATUS',
       );
@@ -96,7 +101,7 @@ const documentController = {
     const limit = parseInt(req.query.limit, 10) || 20;
     const offset = (page - 1) * limit;
 
-    const { items, total } = Document.findByStatus(status, { limit, offset });
+    const { items, total } = Requisition.findByStatus(status, { limit, offset });
 
     res.json({
       success: true,
@@ -112,20 +117,20 @@ const documentController = {
 
   download(req, res) {
     const { id } = req.params;
-    const document = Document.findById(id);
+    const requisition = Requisition.findById(id);
 
-    if (!document) {
-      throw new AppError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
+    if (!requisition) {
+      throw new AppError('Requisición no encontrada', 404, 'REQUISITION_NOT_FOUND');
     }
 
-    const filePath = path.resolve(document.file_path);
+    const filePath = path.resolve(requisition.file_path);
 
     if (!fs.existsSync(filePath)) {
-      throw new AppError('File not found on server', 404, 'FILE_NOT_FOUND');
+      throw new AppError('Archivo no encontrado en el servidor', 404, 'FILE_NOT_FOUND');
     }
 
-    res.download(filePath, document.original_filename);
+    res.download(filePath, requisition.original_filename);
   },
 };
 
-module.exports = documentController;
+module.exports = requisitionController;

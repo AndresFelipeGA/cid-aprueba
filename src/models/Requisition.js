@@ -1,34 +1,34 @@
 const db = require('../config/database');
 
-const Document = {
+const Requisition = {
   findById(id) {
     return db.prepare(`
-      SELECT d.*, u.full_name AS uploader_name, u.username AS uploader_username
-      FROM documents d
-      JOIN users u ON d.uploaded_by = u.id
-      WHERE d.id = ?
+      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username
+      FROM requisitions r
+      JOIN users u ON r.uploaded_by = u.id
+      WHERE r.id = ?
     `).get(id);
   },
 
   findAll({ limit = 20, offset = 0, userRoleLevel } = {}) {
     let query = `
-      SELECT d.*, u.full_name AS uploader_name, u.username AS uploader_username
-      FROM documents d
-      JOIN users u ON d.uploaded_by = u.id
+      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username
+      FROM requisitions r
+      JOIN users u ON r.uploaded_by = u.id
     `;
     const params = [];
 
     if (userRoleLevel) {
-      query += ' WHERE d.current_approval_level >= ? OR d.status IN (\'approved\', \'rejected\')';
+      query += ' WHERE r.current_approval_level >= ? OR r.status IN (\'approved\', \'rejected\')';
       params.push(userRoleLevel);
     }
 
-    query += ' ORDER BY d.created_at DESC LIMIT ? OFFSET ?';
+    query += ' ORDER BY r.created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
     const items = db.prepare(query).all(...params);
 
-    let countQuery = 'SELECT COUNT(*) as total FROM documents';
+    let countQuery = 'SELECT COUNT(*) as total FROM requisitions';
     const countParams = [];
     if (userRoleLevel) {
       countQuery += ' WHERE current_approval_level >= ? OR status IN (\'approved\', \'rejected\')';
@@ -41,16 +41,16 @@ const Document = {
 
   findByStatus(status, { limit = 20, offset = 0 } = {}) {
     const items = db.prepare(`
-      SELECT d.*, u.full_name AS uploader_name, u.username AS uploader_username
-      FROM documents d
-      JOIN users u ON d.uploaded_by = u.id
-      WHERE d.status = ?
-      ORDER BY d.created_at DESC
+      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username
+      FROM requisitions r
+      JOIN users u ON r.uploaded_by = u.id
+      WHERE r.status = ?
+      ORDER BY r.created_at DESC
       LIMIT ? OFFSET ?
     `).all(status, limit, offset);
 
     const { total } = db.prepare(
-      'SELECT COUNT(*) as total FROM documents WHERE status = ?'
+      'SELECT COUNT(*) as total FROM requisitions WHERE status = ?'
     ).get(status);
 
     return { items, total };
@@ -58,11 +58,11 @@ const Document = {
 
   create({ title, description, filePath, originalFilename, uploadedBy }) {
     const result = db.prepare(`
-      INSERT INTO documents (title, description, file_path, original_filename, uploaded_by, status, current_approval_level)
+      INSERT INTO requisitions (title, description, file_path, original_filename, uploaded_by, status, current_approval_level)
       VALUES (?, ?, ?, ?, ?, 'pending', 1)
     `).run(title, description || null, filePath, originalFilename, uploadedBy);
 
-    return Document.findById(result.lastInsertRowid);
+    return Requisition.findById(result.lastInsertRowid);
   },
 
   updateStatus(id, { status, currentApprovalLevel }) {
@@ -81,18 +81,18 @@ const Document = {
     fields.push("updated_at = datetime('now')");
     values.push(id);
 
-    db.prepare(`UPDATE documents SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    db.prepare(`UPDATE requisitions SET ${fields.join(', ')} WHERE id = ?`).run(...values);
 
-    return Document.findById(id);
+    return Requisition.findById(id);
   },
 
   getWithApprovals(id) {
-    const document = Document.findById(id);
-    if (!document) return null;
+    const requisition = Requisition.findById(id);
+    if (!requisition) return null;
 
     const approvalSteps = db.prepare(`
       SELECT * FROM approval_steps
-      WHERE document_id = ?
+      WHERE requisition_id = ?
       ORDER BY step_level ASC
     `).all(id);
 
@@ -100,12 +100,12 @@ const Document = {
       SELECT al.*, u.full_name AS user_name, u.username
       FROM approval_logs al
       JOIN users u ON al.user_id = u.id
-      WHERE al.document_id = ?
+      WHERE al.requisition_id = ?
       ORDER BY al.created_at DESC
     `).all(id);
 
     return {
-      ...document,
+      ...requisition,
       approval_steps: approvalSteps,
       approval_logs: approvalLogs,
     };
@@ -119,14 +119,14 @@ const Document = {
         SUM(CASE WHEN status = 'in_review' THEN 1 ELSE 0 END) as in_review,
         SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
         SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
-      FROM documents
+      FROM requisitions
     `).get();
   },
 
   countByLevel() {
     return db.prepare(`
       SELECT current_approval_level as level, COUNT(*) as count
-      FROM documents
+      FROM requisitions
       WHERE status IN ('pending', 'in_review')
       GROUP BY current_approval_level
       ORDER BY current_approval_level ASC
@@ -135,16 +135,16 @@ const Document = {
 
   findPendingForLevel(roleLevel, { limit = 20, offset = 0 } = {}) {
     const items = db.prepare(`
-      SELECT d.*, u.full_name AS uploader_name, u.username AS uploader_username
-      FROM documents d
-      JOIN users u ON d.uploaded_by = u.id
-      WHERE d.current_approval_level = ? AND d.status IN ('pending', 'in_review')
-      ORDER BY d.created_at ASC
+      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username
+      FROM requisitions r
+      JOIN users u ON r.uploaded_by = u.id
+      WHERE r.current_approval_level = ? AND r.status IN ('pending', 'in_review')
+      ORDER BY r.created_at ASC
       LIMIT ? OFFSET ?
     `).all(roleLevel, limit, offset);
 
     const { total } = db.prepare(
-      'SELECT COUNT(*) as total FROM documents WHERE current_approval_level = ? AND status IN (\'pending\', \'in_review\')'
+      'SELECT COUNT(*) as total FROM requisitions WHERE current_approval_level = ? AND status IN (\'pending\', \'in_review\')'
     ).get(roleLevel);
 
     return { items, total };
@@ -152,13 +152,13 @@ const Document = {
 
   findRecent({ limit = 10 } = {}) {
     return db.prepare(`
-      SELECT d.*, u.full_name AS uploader_name, u.username AS uploader_username
-      FROM documents d
-      JOIN users u ON d.uploaded_by = u.id
-      ORDER BY d.updated_at DESC
+      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username
+      FROM requisitions r
+      JOIN users u ON r.uploaded_by = u.id
+      ORDER BY r.updated_at DESC
       LIMIT ?
     `).all(limit);
   },
 };
 
-module.exports = Document;
+module.exports = Requisition;

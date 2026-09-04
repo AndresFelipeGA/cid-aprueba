@@ -14,6 +14,16 @@ const App = (() => {
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
 
+  // --- Role Level Mapping ---
+  const ROLE_NAMES = {
+    1: 'Coordinador de Territorio',
+    2: 'Subdirector',
+    3: 'Coordinador Financiero',
+    4: 'Coordinador de Proyectos',
+    5: 'Analista',
+    6: 'Revisor',
+  };
+
   // --- Helpers ---
 
   function formatDate(dateStr) {
@@ -63,8 +73,20 @@ const App = (() => {
     return labels[action] || action;
   }
 
+  function roleName(level) {
+    return ROLE_NAMES[level] || `Nivel ${level}`;
+  }
+
   function levelLabel(level) {
-    return `Nivel ${level}`;
+    return roleName(level);
+  }
+
+  function roleDisplay(user) {
+    let display = roleName(user.role_level);
+    if (user.territory) {
+      display += ` - ${user.territory}`;
+    }
+    return display;
   }
 
   function showLoading(container) {
@@ -95,6 +117,19 @@ const App = (() => {
     return div.innerHTML;
   }
 
+  // --- Sidebar Visibility ---
+
+  function updateSidebarVisibility() {
+    const createLink = $('#nav-create-requisition');
+    if (createLink) {
+      if (currentUser && currentUser.role_level === 1) {
+        createLink.classList.remove('hidden');
+      } else {
+        createLink.classList.add('hidden');
+      }
+    }
+  }
+
   // --- Router ---
 
   function navigate(view, params = {}) {
@@ -109,9 +144,9 @@ const App = (() => {
     // Update header title
     const titles = {
       dashboard: 'Panel de Control',
-      documents: 'Documentos',
-      'document-detail': 'Detalle del Documento',
-      upload: 'Subir Documento',
+      requisitions: 'Requisiciones',
+      'requisition-detail': 'Detalle de la Requisición',
+      'create-requisition': 'Crear Requisición',
       profile: 'Mi Perfil',
     };
     $('#header-title').textContent = titles[view] || '';
@@ -125,14 +160,14 @@ const App = (() => {
     case 'dashboard':
       renderDashboard(main);
       break;
-    case 'documents':
-      renderDocuments(main);
+    case 'requisitions':
+      renderRequisitions(main);
       break;
-    case 'document-detail':
-      renderDocumentDetail(main, params.id);
+    case 'requisition-detail':
+      renderRequisitionDetail(main, params.id);
       break;
-    case 'upload':
-      renderUploadForm(main);
+    case 'create-requisition':
+      renderCreateRequisitionForm(main);
       break;
     case 'profile':
       renderProfile(main);
@@ -178,8 +213,11 @@ const App = (() => {
     // Set user info in header
     if (currentUser) {
       $('#user-name').textContent = currentUser.full_name;
-      $('#user-role').textContent = `Nivel ${currentUser.role_level}`;
+      $('#user-role').textContent = roleDisplay(currentUser);
     }
+
+    // Show/hide sidebar links based on role
+    updateSidebarVisibility();
 
     navigate('dashboard');
 
@@ -295,12 +333,12 @@ const App = (() => {
 
       const stats = statsResult.data.summary;
       const recentActivity = statsResult.data.recent_activity || [];
-      const pendingDocs = pendingResult.data.items || [];
+      const pendingRequisitions = pendingResult.data.items || [];
 
       let html = `
         <div class="stats">
           <div class="stat-card stat-card--total">
-            <div class="stat-card__label">Total Documentos</div>
+            <div class="stat-card__label">Total Requisiciones</div>
             <div class="stat-card__value">${stats.total}</div>
           </div>
           <div class="stat-card stat-card--pending">
@@ -321,18 +359,18 @@ const App = (() => {
       // Pending for current user
       html += `<div class="section">`;
       html += `<h3 class="section__title">Pendientes para ti</h3>`;
-      if (pendingDocs.length === 0) {
-        html += `<div class="empty">No tienes documentos pendientes por revisar</div>`;
+      if (pendingRequisitions.length === 0) {
+        html += `<div class="empty">No tienes requisiciones pendientes por revisar</div>`;
       } else {
         html += `<div class="pending-list">`;
-        for (const doc of pendingDocs) {
+        for (const requisition of pendingRequisitions) {
           html += `
-            <div class="pending-item" data-action="view-doc" data-id="${doc.id}">
+            <div class="pending-item" data-action="view-requisition" data-id="${requisition.id}">
               <div>
-                <div class="pending-item__title">${escapeHtml(doc.title)}</div>
-                <div class="pending-item__meta">Subido por ${escapeHtml(doc.uploader_name)} — ${formatDateShort(doc.created_at)}</div>
+                <div class="pending-item__title">${escapeHtml(requisition.title)}</div>
+                <div class="pending-item__meta">Subido por ${escapeHtml(requisition.uploader_name)} — ${formatDateShort(requisition.created_at)}</div>
               </div>
-              ${statusBadge(doc.status)}
+              ${statusBadge(requisition.status)}
             </div>
           `;
         }
@@ -353,7 +391,7 @@ const App = (() => {
               <div class="activity-item__text">
                 <strong>${escapeHtml(log.user_name)}</strong>
                 ${escapeHtml(actionLabel(log.action))}
-                <a href="#" data-action="view-doc" data-id="${log.document_id}">${escapeHtml(log.document_title)}</a>
+                <a href="#" data-action="view-requisition" data-id="${log.requisition_id}">${escapeHtml(log.requisition_title)}</a>
                 ${log.comments ? `<br><em>"${escapeHtml(log.comments)}"</em>` : ''}
               </div>
               <div class="activity-item__time">${formatDateShort(log.created_at)}</div>
@@ -370,24 +408,29 @@ const App = (() => {
     }
   }
 
-  // --- Documents List View ---
+  // --- Requisitions List View ---
 
-  async function renderDocuments(container) {
+  async function renderRequisitions(container) {
     showLoading(container);
 
     try {
-      const result = await API.getDocuments();
-      const documents = result.data.items || [];
+      const result = await API.getRequisitions();
+      const requisitions = result.data.items || [];
 
       let html = `
         <div class="main__header">
-          <h2 class="main__title">Documentos</h2>
-          <button class="btn btn--primary" data-action="navigate" data-view="upload">Subir Documento</button>
-        </div>
+          <h2 class="main__title">Requisiciones</h2>
       `;
 
-      if (documents.length === 0) {
-        html += `<div class="empty">No hay documentos registrados</div>`;
+      // Only show create button for role_level 1
+      if (currentUser && currentUser.role_level === 1) {
+        html += `<button class="btn btn--primary" data-action="navigate" data-view="create-requisition">Crear Requisición</button>`;
+      }
+
+      html += `</div>`;
+
+      if (requisitions.length === 0) {
+        html += `<div class="empty">No hay requisiciones registradas</div>`;
       } else {
         html += `
           <div class="table-wrap">
@@ -404,14 +447,14 @@ const App = (() => {
               <tbody>
         `;
 
-        for (const doc of documents) {
+        for (const requisition of requisitions) {
           html += `
-            <tr class="table__row--clickable" data-action="view-doc" data-id="${doc.id}">
-              <td>${escapeHtml(doc.title)}</td>
-              <td>${statusBadge(doc.status)}</td>
-              <td>${levelLabel(doc.current_approval_level)}</td>
-              <td>${escapeHtml(doc.uploader_name)}</td>
-              <td>${formatDateShort(doc.created_at)}</td>
+            <tr class="table__row--clickable" data-action="view-requisition" data-id="${requisition.id}">
+              <td>${escapeHtml(requisition.title)}</td>
+              <td>${statusBadge(requisition.status)}</td>
+              <td>${levelLabel(requisition.current_approval_level)}</td>
+              <td>${escapeHtml(requisition.uploader_name)}</td>
+              <td>${formatDateShort(requisition.created_at)}</td>
             </tr>
           `;
         }
@@ -425,66 +468,66 @@ const App = (() => {
 
       container.innerHTML = html;
     } catch (err) {
-      showError(container, err.message || 'Error al cargar los documentos');
+      showError(container, err.message || 'Error al cargar las requisiciones');
     }
   }
 
-  // --- Document Detail View ---
+  // --- Requisition Detail View ---
 
-  async function renderDocumentDetail(container, id) {
+  async function renderRequisitionDetail(container, id) {
     if (!id) {
-      navigate('documents');
+      navigate('requisitions');
       return;
     }
 
     showLoading(container);
 
     try {
-      const result = await API.getDocument(id);
-      const doc = result.data.document;
-      const steps = doc.approval_steps || [];
-      const logs = doc.approval_logs || [];
+      const result = await API.getRequisition(id);
+      const requisition = result.data.requisition;
+      const steps = requisition.approval_steps || [];
+      const logs = requisition.approval_logs || [];
 
       const canAct = currentUser &&
-        currentUser.role_level === doc.current_approval_level &&
-        (doc.status === 'pending' || doc.status === 'in_review');
+        currentUser.role_level === requisition.current_approval_level &&
+        (requisition.status === 'pending' || requisition.status === 'in_review');
 
       let html = `
-        <a href="#" class="back-link" data-action="navigate" data-view="documents">&larr; Volver a documentos</a>
+        <a href="#" class="back-link" data-action="navigate" data-view="requisitions">&larr; Volver a requisiciones</a>
 
-        <div class="doc-detail">
+        <div class="req-detail">
           <div>
-            <div class="doc-detail__info">
-              <h2 class="doc-detail__title">${escapeHtml(doc.title)}</h2>
-              <ul class="doc-detail__meta">
+            <div class="req-detail__info">
+              <h2 class="req-detail__title">${escapeHtml(requisition.title)}</h2>
+              <ul class="req-detail__meta">
                 <li>
-                  <span class="doc-detail__meta-label">Estado</span>
-                  <span class="doc-detail__meta-value">${statusBadge(doc.status)}</span>
+                  <span class="req-detail__meta-label">Estado</span>
+                  <span class="req-detail__meta-value">${statusBadge(requisition.status)}</span>
                 </li>
                 <li>
-                  <span class="doc-detail__meta-label">Nivel actual</span>
-                  <span class="doc-detail__meta-value">${levelLabel(doc.current_approval_level)}</span>
+                  <span class="req-detail__meta-label">Nivel actual</span>
+                  <span class="req-detail__meta-value">${levelLabel(requisition.current_approval_level)}</span>
                 </li>
                 <li>
-                  <span class="doc-detail__meta-label">Subido por</span>
-                  <span class="doc-detail__meta-value">${escapeHtml(doc.uploader_name)}</span>
+                  <span class="req-detail__meta-label">Subido por</span>
+                  <span class="req-detail__meta-value">${escapeHtml(requisition.uploader_name)}</span>
                 </li>
                 <li>
-                  <span class="doc-detail__meta-label">Archivo</span>
-                  <span class="doc-detail__meta-value">${escapeHtml(doc.original_filename)}</span>
+                  <span class="req-detail__meta-label">Archivo</span>
+                  <span class="req-detail__meta-value">${escapeHtml(requisition.original_filename)}</span>
                 </li>
                 <li>
-                  <span class="doc-detail__meta-label">Fecha de subida</span>
-                  <span class="doc-detail__meta-value">${formatDate(doc.created_at)}</span>
+                  <span class="req-detail__meta-label">Fecha de creación</span>
+                  <span class="req-detail__meta-value">${formatDate(requisition.created_at)}</span>
                 </li>
                 <li>
-                  <span class="doc-detail__meta-label">Ultima actualizacion</span>
-                  <span class="doc-detail__meta-value">${formatDate(doc.updated_at)}</span>
+                  <span class="req-detail__meta-label">Ultima actualizacion</span>
+                  <span class="req-detail__meta-value">${formatDate(requisition.updated_at)}</span>
                 </li>
               </ul>
-              ${doc.description ? `<div class="doc-detail__description">${escapeHtml(doc.description)}</div>` : ''}
-              <div class="doc-detail__actions">
-                <button class="btn btn--outline btn--sm" data-action="download" data-id="${doc.id}" data-filename="${escapeHtml(doc.original_filename)}">Descargar archivo</button>
+              ${requisition.description ? `<div class="req-detail__description">${escapeHtml(requisition.description)}</div>` : ''}
+              <div class="req-detail__actions">
+                <button class="btn btn--outline btn--sm" data-action="download" data-id="${requisition.id}" data-filename="${escapeHtml(requisition.original_filename)}">Descargar archivo</button>
               </div>
             </div>
       `;
@@ -493,15 +536,15 @@ const App = (() => {
       if (canAct) {
         html += `
             <div class="approval-panel" id="approval-panel">
-              <h3 class="approval-panel__title">Accion de aprobacion — ${levelLabel(doc.current_approval_level)}</h3>
+              <h3 class="approval-panel__title">Accion de aprobacion — ${levelLabel(requisition.current_approval_level)}</h3>
               <div class="form__group">
                 <label class="form__label" for="approval-comments">Comentarios</label>
                 <textarea class="form__input" id="approval-comments" rows="3" placeholder="Comentarios opcionales para aprobacion, obligatorios para rechazo..."></textarea>
               </div>
               <div id="approval-feedback"></div>
               <div class="approval-panel__actions">
-                <button class="btn btn--secondary" id="btn-approve" data-action="approve" data-id="${doc.id}">Aprobar</button>
-                <button class="btn btn--danger" id="btn-reject" data-action="reject" data-id="${doc.id}">Rechazar</button>
+                <button class="btn btn--secondary" id="btn-approve" data-action="approve" data-id="${requisition.id}">Aprobar</button>
+                <button class="btn btn--danger" id="btn-reject" data-action="reject" data-id="${requisition.id}">Rechazar</button>
               </div>
             </div>
         `;
@@ -526,8 +569,8 @@ const App = (() => {
           itemClass = 'timeline__item--approved';
         } else if (step.status === 'rejected') {
           itemClass = 'timeline__item--rejected';
-        } else if (step.step_level === doc.current_approval_level &&
-                   (doc.status === 'pending' || doc.status === 'in_review')) {
+        } else if (step.step_level === requisition.current_approval_level &&
+                   (requisition.status === 'pending' || requisition.status === 'in_review')) {
           itemClass = 'timeline__item--current';
         }
 
@@ -569,32 +612,41 @@ const App = (() => {
       }
 
       html += `</div>`; // close right column
-      html += `</div>`; // close doc-detail grid
+      html += `</div>`; // close req-detail grid
 
       container.innerHTML = html;
     } catch (err) {
-      showError(container, err.message || 'Error al cargar el documento');
+      showError(container, err.message || 'Error al cargar la requisición');
     }
   }
 
-  // --- Upload Form View ---
+  // --- Create Requisition Form View ---
 
-  function renderUploadForm(container) {
+  function renderCreateRequisitionForm(container) {
+    // Client-side guard: only role_level 1 can create requisitions
+    if (!currentUser || currentUser.role_level !== 1) {
+      container.innerHTML = `
+        <div class="alert alert--error">No tiene permisos para crear requisiciones. Solo los Coordinadores de Territorio pueden crear requisiciones.</div>
+      `;
+      setTimeout(() => navigate('dashboard'), 2000);
+      return;
+    }
+
     let html = `
-      <a href="#" class="back-link" data-action="navigate" data-view="documents">&larr; Volver a documentos</a>
+      <a href="#" class="back-link" data-action="navigate" data-view="requisitions">&larr; Volver a requisiciones</a>
 
       <div class="upload-layout">
         <div class="upload-form">
-          <h2 class="main__title" style="margin-bottom: 24px;">Subir Documento</h2>
+          <h2 class="main__title" style="margin-bottom: 24px;">Crear Requisición</h2>
           <div id="upload-feedback"></div>
           <form id="upload-form">
             <div class="form__group">
               <label class="form__label" for="upload-title">Titulo</label>
-              <input class="form__input" type="text" id="upload-title" required maxlength="255" placeholder="Titulo del documento">
+              <input class="form__input" type="text" id="upload-title" required maxlength="255" placeholder="Titulo de la requisición">
             </div>
             <div class="form__group">
               <label class="form__label" for="upload-description">Descripcion</label>
-              <textarea class="form__input" id="upload-description" rows="3" maxlength="1000" placeholder="Descripcion opcional del documento"></textarea>
+              <textarea class="form__input" id="upload-description" rows="3" maxlength="1000" placeholder="Descripcion opcional de la requisición"></textarea>
             </div>
             <div class="form__group">
               <label class="form__label">Archivo</label>
@@ -604,7 +656,7 @@ const App = (() => {
                 <div class="upload-form__file-name" id="file-name"></div>
               </div>
             </div>
-            <button class="btn btn--primary btn--block" type="submit" id="upload-btn">Subir Documento</button>
+            <button class="btn btn--primary btn--block" type="submit" id="upload-btn">Crear Requisición</button>
           </form>
         </div>
 
@@ -659,7 +711,7 @@ const App = (() => {
     });
 
     // Form submit
-    $('#upload-form').addEventListener('submit', handleUpload);
+    $('#upload-form').addEventListener('submit', handleCreateRequisition);
   }
 
   function showFilePreview(file) {
@@ -746,7 +798,7 @@ const App = (() => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
-  async function handleUpload(e) {
+  async function handleCreateRequisition(e) {
     e.preventDefault();
 
     const title = $('#upload-title').value.trim();
@@ -771,19 +823,19 @@ const App = (() => {
     formData.append('file', fileInput.files[0]);
 
     btn.disabled = true;
-    btn.textContent = 'Subiendo...';
+    btn.textContent = 'Creando...';
     feedback.innerHTML = '';
 
     try {
-      const result = await API.uploadDocument(formData);
-      feedback.innerHTML = `<div class="alert alert--success">${escapeHtml(result.message || 'Documento subido exitosamente')}</div>`;
-      // Navigate to the new document after a brief delay
-      const docId = result.data.document.id;
-      setTimeout(() => navigate('document-detail', { id: docId }), 1500);
+      const result = await API.createRequisition(formData);
+      feedback.innerHTML = `<div class="alert alert--success">${escapeHtml(result.message || 'Requisición creada exitosamente')}</div>`;
+      // Navigate to the new requisition after a brief delay
+      const requisitionId = result.data.requisition.id;
+      setTimeout(() => navigate('requisition-detail', { id: requisitionId }), 1500);
     } catch (err) {
-      feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al subir el documento')}</div>`;
+      feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al crear la requisición')}</div>`;
       btn.disabled = false;
-      btn.textContent = 'Subir Documento';
+      btn.textContent = 'Crear Requisición';
     }
   }
 
@@ -815,9 +867,15 @@ const App = (() => {
               <input class="form__input" type="email" id="profile-email" value="${escapeHtml(user.email || '')}" required placeholder="ejemplo@correo.com">
             </div>
             <div class="form__group">
-              <label class="form__label">Nivel de rol</label>
-              <input class="form__input" type="text" value="Nivel ${user.role_level}" disabled>
+              <label class="form__label">Rol</label>
+              <input class="form__input" type="text" value="${escapeHtml(roleName(user.role_level))}" disabled>
             </div>
+            ${user.territory ? `
+            <div class="form__group">
+              <label class="form__label">Territorio</label>
+              <input class="form__input" type="text" value="${escapeHtml(user.territory)}" disabled>
+            </div>
+            ` : ''}
             <button class="btn btn--primary btn--block" type="submit" id="profile-save-btn">Guardar cambios</button>
           </form>
         </div>
@@ -872,7 +930,7 @@ const App = (() => {
 
   // --- Approval Actions ---
 
-  async function handleApprove(docId) {
+  async function handleApprove(requisitionId) {
     const comments = $('#approval-comments') ? $('#approval-comments').value.trim() : '';
     const btn = $('#btn-approve');
     const feedback = $('#approval-feedback');
@@ -882,9 +940,9 @@ const App = (() => {
     if ($('#btn-reject')) $('#btn-reject').disabled = true;
 
     try {
-      const result = await API.approveDocument(docId, comments);
-      feedback.innerHTML = `<div class="alert alert--success">${escapeHtml(result.message || 'Documento aprobado')}</div>`;
-      setTimeout(() => navigate('document-detail', { id: docId }), 1000);
+      const result = await API.approveRequisition(requisitionId, comments);
+      feedback.innerHTML = `<div class="alert alert--success">${escapeHtml(result.message || 'Requisición aprobada')}</div>`;
+      setTimeout(() => navigate('requisition-detail', { id: requisitionId }), 1000);
     } catch (err) {
       feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al aprobar')}</div>`;
       btn.disabled = false;
@@ -893,12 +951,12 @@ const App = (() => {
     }
   }
 
-  async function handleReject(docId) {
+  async function handleReject(requisitionId) {
     const comments = $('#approval-comments') ? $('#approval-comments').value.trim() : '';
     const feedback = $('#approval-feedback');
 
     if (!comments) {
-      feedback.innerHTML = '<div class="alert alert--error">Los comentarios son obligatorios para rechazar un documento</div>';
+      feedback.innerHTML = '<div class="alert alert--error">Los comentarios son obligatorios para rechazar una requisición</div>';
       return;
     }
 
@@ -908,9 +966,9 @@ const App = (() => {
     if ($('#btn-approve')) $('#btn-approve').disabled = true;
 
     try {
-      const result = await API.rejectDocument(docId, comments);
-      feedback.innerHTML = `<div class="alert alert--success">${escapeHtml(result.message || 'Documento rechazado')}</div>`;
-      setTimeout(() => navigate('document-detail', { id: docId }), 1000);
+      const result = await API.rejectRequisition(requisitionId, comments);
+      feedback.innerHTML = `<div class="alert alert--success">${escapeHtml(result.message || 'Requisición rechazada')}</div>`;
+      setTimeout(() => navigate('requisition-detail', { id: requisitionId }), 1000);
     } catch (err) {
       feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al rechazar')}</div>`;
       btn.disabled = false;
@@ -921,14 +979,14 @@ const App = (() => {
 
   // --- Download Handler ---
 
-  async function handleDownload(docId, filename) {
+  async function handleDownload(requisitionId, filename) {
     try {
-      const response = await API.downloadDocument(docId);
+      const response = await API.downloadRequisition(requisitionId);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename || 'documento';
+      a.download = filename || 'archivo';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -998,10 +1056,10 @@ const App = (() => {
         navigate(view);
       }
 
-      if (action === 'view-doc') {
+      if (action === 'view-requisition') {
         e.preventDefault();
         const id = target.dataset.id;
-        navigate('document-detail', { id });
+        navigate('requisition-detail', { id });
       }
 
       if (action === 'approve') {

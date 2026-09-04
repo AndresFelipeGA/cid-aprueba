@@ -3,7 +3,7 @@ const fs = require('fs');
 const express = require('express');
 const multer = require('multer');
 const { body } = require('express-validator');
-const documentController = require('../controllers/documentController');
+const requisitionController = require('../controllers/requisitionController');
 const authenticate = require('../middleware/authenticate');
 const validate = require('../middleware/validate');
 const asyncHandler = require('../middleware/asyncHandler');
@@ -39,7 +39,7 @@ const fileFilter = (_req, file, cb) => {
     cb(null, true);
   } else {
     cb(new AppError(
-      `File type not allowed. Accepted types: ${ALLOWED_EXTENSIONS.join(', ')}`,
+      `Tipo de archivo no permitido. Tipos aceptados: ${ALLOWED_EXTENSIONS.join(', ')}`,
       400,
       'INVALID_FILE_TYPE',
     ));
@@ -54,45 +54,45 @@ const upload = multer({
   },
 });
 
-// GET /api/documents
+// GET /api/requisitions
 router.get(
   '/',
   authenticate,
-  asyncHandler(documentController.list),
+  asyncHandler(requisitionController.list),
 );
 
-// GET /api/documents/:id
+// GET /api/requisitions/:id
 router.get(
   '/:id',
   authenticate,
-  asyncHandler(documentController.getById),
+  asyncHandler(requisitionController.getById),
 );
 
-// POST /api/documents
+// POST /api/requisitions
 router.post(
   '/',
   authenticate,
   upload.single('file'),
   [
-    body('title').trim().notEmpty().withMessage('Title is required').isLength({ max: 255 }).withMessage('Title must be at most 255 characters'),
-    body('description').optional().trim().isLength({ max: 1000 }).withMessage('Description must be at most 1000 characters'),
+    body('title').trim().notEmpty().withMessage('El título es requerido').isLength({ max: 255 }).withMessage('El título debe tener máximo 255 caracteres'),
+    body('description').optional().trim().isLength({ max: 1000 }).withMessage('La descripción debe tener máximo 1000 caracteres'),
   ],
   validate,
-  asyncHandler(documentController.create),
+  asyncHandler(requisitionController.create),
 );
 
-// GET /api/documents/:id/download
+// GET /api/requisitions/:id/download
 router.get(
   '/:id/download',
   authenticate,
-  asyncHandler(documentController.download),
+  asyncHandler(requisitionController.download),
 );
 
-// GET /api/documents/status/:status
+// GET /api/requisitions/status/:status
 router.get(
   '/status/:status',
   authenticate,
-  asyncHandler(documentController.getByStatus),
+  asyncHandler(requisitionController.getByStatus),
 );
 
 module.exports = router;

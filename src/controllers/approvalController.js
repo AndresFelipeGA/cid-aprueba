@@ -1,5 +1,5 @@
 const db = require('../config/database');
-const Document = require('../models/Document');
+const Requisition = require('../models/Requisition');
 const ApprovalStep = require('../models/ApprovalStep');
 const ApprovalLog = require('../models/ApprovalLog');
 const AppError = require('../utils/AppError');
@@ -9,34 +9,34 @@ const MAX_APPROVAL_LEVEL = 6;
 
 const approvalController = {
   approve(req, res) {
-    const { documentId } = req.params;
+    const { requisitionId } = req.params;
     const { comments } = req.body;
     const user = req.user;
 
-    const document = Document.findById(documentId);
-    if (!document) {
-      throw new AppError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
+    const requisition = Requisition.findById(requisitionId);
+    if (!requisition) {
+      throw new AppError('Requisición no encontrada', 404, 'REQUISITION_NOT_FOUND');
     }
 
-    if (document.status === 'approved') {
-      throw new AppError('Document is already fully approved', 400, 'ALREADY_APPROVED');
+    if (requisition.status === 'approved') {
+      throw new AppError('La requisición ya fue aprobada completamente', 400, 'ALREADY_APPROVED');
     }
 
-    if (document.status === 'rejected') {
-      throw new AppError('Document has been rejected and cannot be approved', 400, 'ALREADY_REJECTED');
+    if (requisition.status === 'rejected') {
+      throw new AppError('La requisición fue rechazada y no puede ser aprobada', 400, 'ALREADY_REJECTED');
     }
 
-    if (user.role_level !== document.current_approval_level) {
+    if (user.role_level !== requisition.current_approval_level) {
       throw new AppError(
-        'Not authorized to approve at this level',
+        'No autorizado para aprobar en este nivel',
         403,
         'FORBIDDEN',
       );
     }
 
-    const step = ApprovalStep.findByDocumentAndLevel(documentId, document.current_approval_level);
+    const step = ApprovalStep.findByRequisitionAndLevel(requisitionId, requisition.current_approval_level);
     if (!step) {
-      throw new AppError('Approval step not found', 404, 'STEP_NOT_FOUND');
+      throw new AppError('Paso de aprobación no encontrado', 404, 'STEP_NOT_FOUND');
     }
 
     // Use a transaction for atomicity
@@ -46,7 +46,7 @@ const approvalController = {
 
       // Log the action
       ApprovalLog.create({
-        documentId: parseInt(documentId, 10),
+        requisitionId: parseInt(requisitionId, 10),
         approvalStepId: step.id,
         userId: user.id,
         action: 'approved',
@@ -54,17 +54,17 @@ const approvalController = {
       });
 
       // Determine next state
-      const nextLevel = document.current_approval_level + 1;
+      const nextLevel = requisition.current_approval_level + 1;
 
       if (nextLevel > MAX_APPROVAL_LEVEL) {
-        // All levels approved — document is fully approved
-        Document.updateStatus(documentId, {
+        // All levels approved — requisition is fully approved
+        Requisition.updateStatus(requisitionId, {
           status: 'approved',
           currentApprovalLevel: nextLevel,
         });
       } else {
         // Move to next level
-        Document.updateStatus(documentId, {
+        Requisition.updateStatus(requisitionId, {
           status: 'in_review',
           currentApprovalLevel: nextLevel,
         });
@@ -74,51 +74,51 @@ const approvalController = {
     performApproval();
 
     logger.info(
-      `Document approved: docId=${documentId}, level=${document.current_approval_level}, userId=${user.id}`,
+      `Requisition approved: reqId=${requisitionId}, level=${requisition.current_approval_level}, userId=${user.id}`,
     );
 
-    const updatedDocument = Document.getWithApprovals(documentId);
+    const updatedRequisition = Requisition.getWithApprovals(requisitionId);
 
     res.json({
       success: true,
-      data: { document: updatedDocument },
-      message: `Document approved at level ${document.current_approval_level}`,
+      data: { requisition: updatedRequisition },
+      message: `Requisición aprobada en el nivel ${requisition.current_approval_level}`,
     });
   },
 
   reject(req, res) {
-    const { documentId } = req.params;
+    const { requisitionId } = req.params;
     const { comments } = req.body;
     const user = req.user;
 
     if (!comments || comments.trim().length === 0) {
-      throw new AppError('Comments are required when rejecting a document', 400, 'COMMENTS_REQUIRED');
+      throw new AppError('Los comentarios son requeridos al rechazar una requisición', 400, 'COMMENTS_REQUIRED');
     }
 
-    const document = Document.findById(documentId);
-    if (!document) {
-      throw new AppError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
+    const requisition = Requisition.findById(requisitionId);
+    if (!requisition) {
+      throw new AppError('Requisición no encontrada', 404, 'REQUISITION_NOT_FOUND');
     }
 
-    if (document.status === 'approved') {
-      throw new AppError('Document is already fully approved', 400, 'ALREADY_APPROVED');
+    if (requisition.status === 'approved') {
+      throw new AppError('La requisición ya fue aprobada completamente', 400, 'ALREADY_APPROVED');
     }
 
-    if (document.status === 'rejected') {
-      throw new AppError('Document has already been rejected', 400, 'ALREADY_REJECTED');
+    if (requisition.status === 'rejected') {
+      throw new AppError('La requisición ya fue rechazada', 400, 'ALREADY_REJECTED');
     }
 
-    if (user.role_level !== document.current_approval_level) {
+    if (user.role_level !== requisition.current_approval_level) {
       throw new AppError(
-        'Not authorized to reject at this level',
+        'No autorizado para rechazar en este nivel',
         403,
         'FORBIDDEN',
       );
     }
 
-    const step = ApprovalStep.findByDocumentAndLevel(documentId, document.current_approval_level);
+    const step = ApprovalStep.findByRequisitionAndLevel(requisitionId, requisition.current_approval_level);
     if (!step) {
-      throw new AppError('Approval step not found', 404, 'STEP_NOT_FOUND');
+      throw new AppError('Paso de aprobación no encontrado', 404, 'STEP_NOT_FOUND');
     }
 
     // Use a transaction for atomicity
@@ -128,15 +128,15 @@ const approvalController = {
 
       // Log the action
       ApprovalLog.create({
-        documentId: parseInt(documentId, 10),
+        requisitionId: parseInt(requisitionId, 10),
         approvalStepId: step.id,
         userId: user.id,
         action: 'rejected',
         comments: comments.trim(),
       });
 
-      // Mark document as rejected (terminal state)
-      Document.updateStatus(documentId, {
+      // Mark requisition as rejected (terminal state)
+      Requisition.updateStatus(requisitionId, {
         status: 'rejected',
       });
     });
@@ -144,27 +144,27 @@ const approvalController = {
     performRejection();
 
     logger.info(
-      `Document rejected: docId=${documentId}, level=${document.current_approval_level}, userId=${user.id}`,
+      `Requisition rejected: reqId=${requisitionId}, level=${requisition.current_approval_level}, userId=${user.id}`,
     );
 
-    const updatedDocument = Document.getWithApprovals(documentId);
+    const updatedRequisition = Requisition.getWithApprovals(requisitionId);
 
     res.json({
       success: true,
-      data: { document: updatedDocument },
-      message: `Document rejected at level ${document.current_approval_level}`,
+      data: { requisition: updatedRequisition },
+      message: `Requisición rechazada en el nivel ${requisition.current_approval_level}`,
     });
   },
 
   history(req, res) {
-    const { documentId } = req.params;
+    const { requisitionId } = req.params;
 
-    const document = Document.findById(documentId);
-    if (!document) {
-      throw new AppError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
+    const requisition = Requisition.findById(requisitionId);
+    if (!requisition) {
+      throw new AppError('Requisición no encontrada', 404, 'REQUISITION_NOT_FOUND');
     }
 
-    const logs = ApprovalLog.findByDocument(documentId);
+    const logs = ApprovalLog.findByRequisition(requisitionId);
 
     res.json({
       success: true,

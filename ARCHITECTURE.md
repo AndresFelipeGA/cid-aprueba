@@ -1,18 +1,18 @@
 # CID Aprueba — System Architecture
 
-> Hierarchical Document Approval Workflow for Corporación Infancia y Desarrollo
+> Hierarchical Requisition Approval Workflow for Corporación Infancia y Desarrollo
 
 ---
 
 ## 1. System Overview
 
-**CID Aprueba** is a web application that manages sequential, role-based approval of project quotations and proposals. Documents uploaded by users must pass through a chain of **6 hierarchical approval roles** before reaching full approval status. Each role can only act on a document once the previous (higher-authority) role has approved it.
+**CID Aprueba** is a web application that manages sequential, role-based approval of project quotations and proposals. Requisitions uploaded by users must pass through a chain of **6 hierarchical approval roles** before reaching full approval status. Each role can only act on a requisition once the previous (higher-authority) role has approved it.
 
 ### Core Workflow
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Uploaded: User submits document
+    [*] --> Uploaded: User submits requisition
     Uploaded --> Level1_Review: Awaiting Role 1
     Level1_Review --> Level2_Review: Role 1 approves
     Level1_Review --> Rejected: Role 1 rejects
@@ -33,7 +33,7 @@ stateDiagram-v2
 ### Key Principles
 
 - **Sequential gating:** Each level unlocks only after the previous level approves.
-- **Visibility rules:** Users see dashboard metrics for all documents but can only open/act on documents at or below their approval level.
+- **Visibility rules:** Users see dashboard metrics for all requisitions but can only open/act on requisitions at or below their approval level.
 - **Audit trail:** Every approval or rejection is logged with timestamp, user, and optional comments.
 
 ---
@@ -81,19 +81,19 @@ cid-aprueba/
 │   │
 │   ├── models/
 │   │   ├── User.js            # User CRUD and queries
-│   │   ├── Document.js        # Document CRUD and queries
+│   │   ├── Requisition.js     # Requisition CRUD and queries
 │   │   ├── ApprovalStep.js    # Approval step management
 │   │   └── ApprovalLog.js     # Audit log queries
 │   │
 │   ├── controllers/
 │   │   ├── authController.js      # Login, register, token refresh
-│   │   ├── documentController.js  # Upload, list, detail, download
+│   │   ├── requisitionController.js  # Upload, list, detail, download
 │   │   ├── approvalController.js  # Approve, reject, return
 │   │   └── dashboardController.js # Metrics and summaries
 │   │
 │   ├── routes/
 │   │   ├── auth.js
-│   │   ├── documents.js
+│   │   ├── requisitions.js
 │   │   ├── approvals.js
 │   │   └── dashboard.js
 │   │
@@ -102,18 +102,14 @@ cid-aprueba/
 │       └── logger.js          # Logging utility
 │
 ├── public/                    # Static frontend assets
-│   ├── index.html             # Login / entry page
-│   ├── dashboard.html         # Main dashboard
-│   ├── document.html          # Document detail and approval view
+│   ├── index.html             # Single-page app (login + main views)
 │   ├── css/
 │   │   └── styles.css         # Global styles with CID brand colors
 │   ├── js/
 │   │   ├── api.js             # Fetch wrapper with JWT handling
-│   │   ├── auth.js            # Login/logout logic
-│   │   ├── dashboard.js       # Dashboard rendering
-│   │   └── document.js        # Document detail and approval UI
+│   │   └── app.js             # Main application logic (SPA routing, views)
 │   └── assets/
-│       └── logo.png           # CID logo
+│       └── logo-LA-CID.svg    # CID logo
 │
 ├── uploads/                   # Uploaded document files (gitignored)
 │
@@ -134,9 +130,9 @@ cid-aprueba/
 
 ```mermaid
 erDiagram
-    users ||--o{ documents : uploads
+    users ||--o{ requisitions : uploads
     users ||--o{ approval_logs : performs
-    documents ||--o{ approval_steps : has
+    requisitions ||--o{ approval_steps : has
     approval_steps ||--o{ approval_logs : generates
 
     users {
@@ -146,11 +142,12 @@ erDiagram
         text password_hash
         integer role_level
         text full_name
+        text territory
         text created_at
         text updated_at
     }
 
-    documents {
+    requisitions {
         integer id PK
         text title
         text description
@@ -165,7 +162,7 @@ erDiagram
 
     approval_steps {
         integer id PK
-        integer document_id FK
+        integer requisition_id FK
         integer step_level
         text status
         integer assigned_role_level
@@ -175,7 +172,7 @@ erDiagram
 
     approval_logs {
         integer id PK
-        integer document_id FK
+        integer requisition_id FK
         integer approval_step_id FK
         integer user_id FK
         text action
@@ -194,18 +191,18 @@ erDiagram
 | `username` | TEXT | UNIQUE, NOT NULL | Login username |
 | `email` | TEXT | UNIQUE, NOT NULL | User email |
 | `password_hash` | TEXT | NOT NULL | bcrypt-hashed password |
-| `role_level` | INTEGER | NOT NULL, CHECK 1-6 | 1 = highest authority, 6 = lowest |
+| `role_level` | INTEGER | NOT NULL, CHECK 1-6 | 1 = Coordinador de Territorio, 6 = Revisor |
 | `full_name` | TEXT | NOT NULL | Display name |
 | `is_active` | INTEGER | DEFAULT 1 | Soft-delete flag |
 | `created_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 | `updated_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 
-#### `documents`
+#### `requisitions`
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| `id` | INTEGER | PK, AUTOINCREMENT | Unique document ID |
-| `title` | TEXT | NOT NULL | Document title |
+| `id` | INTEGER | PK, AUTOINCREMENT | Unique requisition ID |
+| `title` | TEXT | NOT NULL | Requisition title |
 | `description` | TEXT | | Optional description |
 | `file_path` | TEXT | NOT NULL | Server path to uploaded file |
 | `original_filename` | TEXT | NOT NULL | Original upload filename |
@@ -220,21 +217,21 @@ erDiagram
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | INTEGER | PK, AUTOINCREMENT | |
-| `document_id` | INTEGER | FK → documents.id | |
+| `requisition_id` | INTEGER | FK → requisitions.id | |
 | `step_level` | INTEGER | NOT NULL, 1-6 | Which level this step represents |
 | `status` | TEXT | DEFAULT `pending` | `pending`, `approved`, `rejected` |
 | `assigned_role_level` | INTEGER | NOT NULL | Role level required to act |
 | `created_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 | `updated_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 
-**Note:** When a document is uploaded, 6 `approval_steps` rows are created (one per level), all starting as `pending`.
+**Note:** When a requisition is uploaded, 6 `approval_steps` rows are created (one per level), all starting as `pending`.
 
 #### `approval_logs`
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | INTEGER | PK, AUTOINCREMENT | |
-| `document_id` | INTEGER | FK → documents.id | |
+| `requisition_id` | INTEGER | FK → requisitions.id | |
 | `approval_step_id` | INTEGER | FK → approval_steps.id | |
 | `user_id` | INTEGER | FK → users.id | Who performed the action |
 | `action` | TEXT | NOT NULL | `approved`, `rejected` |
@@ -255,30 +252,30 @@ All endpoints return JSON. Protected routes require `Authorization: Bearer <toke
 | POST | `/api/auth/register` | Admin | Create new user account |
 | GET | `/api/auth/me` | Yes | Get current user profile |
 
-### Documents
+### Requisitions
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/documents` | Yes | List documents visible to current user |
-| GET | `/api/documents/:id` | Yes | Get document detail with approval history |
-| POST | `/api/documents` | Yes | Upload new document (multipart) |
-| GET | `/api/documents/:id/download` | Yes | Download the original file |
+| GET | `/api/requisitions` | Yes | List requisitions visible to current user |
+| GET | `/api/requisitions/:id` | Yes | Get requisition detail with approval history |
+| POST | `/api/requisitions` | Yes | Upload new requisition (multipart) |
+| GET | `/api/requisitions/:id/download` | Yes | Download the original file |
 
 ### Approvals
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/api/approvals/:documentId/approve` | Yes | Approve document at current level |
-| POST | `/api/approvals/:documentId/reject` | Yes | Reject document with comments |
-| GET | `/api/approvals/:documentId/history` | Yes | Get full approval log for a document |
+| POST | `/api/approvals/:requisitionId/approve` | Yes | Approve requisition at current level |
+| POST | `/api/approvals/:requisitionId/reject` | Yes | Reject requisition with comments |
+| GET | `/api/approvals/:requisitionId/history` | Yes | Get full approval log for a requisition |
 
 ### Dashboard
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/dashboard/stats` | Yes | Aggregate metrics: total, pending, approved, rejected |
-| GET | `/api/dashboard/pending` | Yes | Documents awaiting current user action |
-| GET | `/api/dashboard/recent` | Yes | Recently processed documents |
+| GET | `/api/dashboard/pending` | Yes | Requisitions awaiting current user action |
+| GET | `/api/dashboard/recent` | Yes | Recently processed requisitions |
 
 ---
 
@@ -299,12 +296,12 @@ sequenceDiagram
 
     Note over C: Store token in localStorage
 
-    C->>S: GET /api/documents with Bearer token
+    C->>S: GET /api/requisitions with Bearer token
     S->>S: authenticate middleware verifies JWT
     S->>S: authorize middleware checks role_level
-    S->>DB: Query documents filtered by role visibility
-    DB-->>S: Document list
-    S-->>C: 200 with filtered documents
+    S->>DB: Query requisitions filtered by role visibility
+    DB-->>S: Requisition list
+    S-->>C: 200 with filtered requisitions
 ```
 
 ### JWT Payload Structure
@@ -312,7 +309,7 @@ sequenceDiagram
 ```json
 {
   "sub": 1,
-  "username": "director",
+  "username": "coord.territorio",
   "role_level": 1,
   "iat": 1693000000,
   "exp": 1693086400
@@ -324,17 +321,17 @@ sequenceDiagram
 | Rule | Implementation |
 |------|---------------|
 | **View dashboard metrics** | All authenticated users |
-| **View document list** | All authenticated users see metadata; detail access restricted by level |
-| **Open document detail** | User role_level must be ≤ document current_approval_level |
-| **Approve/Reject** | User role_level must equal document current_approval_level |
-| **Upload document** | Any authenticated user |
-| **Register users** | Admin only (role_level = 1 or dedicated admin flag) |
+| **View requisition list** | All authenticated users see metadata; detail access restricted by level |
+| **Open requisition detail** | User role_level must be ≤ requisition current_approval_level |
+| **Approve/Reject** | User role_level must equal requisition current_approval_level |
+| **Upload requisition** | Coordinadores de Territorio (role_level = 1) only |
+| **Register users** | Admin only (dedicated admin flag) |
 
 ---
 
 ## 7. Approval Workflow State Machine
 
-### Document Status Transitions
+### Requisition Status Transitions
 
 ```
 UPLOADED → IN_REVIEW → APPROVED
@@ -343,25 +340,25 @@ UPLOADED → IN_REVIEW → APPROVED
 
 ### Per-Step Logic
 
-1. Document is uploaded → `status = 'pending'`, `current_approval_level = 1`
+1. Requisition is uploaded → `status = 'pending'`, `current_approval_level = 1`
 2. All 6 `approval_steps` are created with `status = 'pending'`
 3. When Role 1 user approves:
    - `approval_steps[level=1].status = 'approved'`
-   - `documents.current_approval_level = 2`
-   - `documents.status = 'in_review'`
+   - `requisitions.current_approval_level = 2`
+   - `requisitions.status = 'in_review'`
    - An `approval_logs` entry is created
 4. Process repeats for levels 2–6
 5. When Role 6 approves:
-   - `documents.status = 'approved'`
-   - `documents.current_approval_level = 7` (past all levels)
+   - `requisitions.status = 'approved'`
+   - `requisitions.current_approval_level = 7` (past all levels)
 6. If **any** role rejects:
-   - `documents.status = 'rejected'`
+   - `requisitions.status = 'rejected'`
    - The step and all subsequent steps remain `pending`
    - An `approval_logs` entry records the rejection with comments
 
 ### Rejection Handling
 
-Rejected documents are terminal — they cannot re-enter the approval flow. If a revised version is needed, the user uploads a new document.
+Rejected requisitions are terminal — they cannot re-enter the approval flow. If a revised version is needed, the user uploads a new requisition.
 
 ---
 
@@ -373,9 +370,7 @@ The frontend is a set of static HTML pages served from `/public`. JavaScript mod
 
 | Page | Purpose |
 |------|---------|
-| `index.html` | Login form |
-| `dashboard.html` | Metrics cards, pending documents list, recent activity |
-| `document.html` | Document detail, approval timeline, approve/reject actions |
+| `index.html` | Single-page app: login, dashboard, requisition list, detail, create, profile |
 
 ### Brand Design Tokens
 
@@ -403,7 +398,7 @@ The frontend is a set of static HTML pages served from `/public`. JavaScript mod
 |---------|----------|
 | **More approval levels** | Add rows to `approval_steps` on upload; `role_level` range is configurable, not hardcoded to 6 |
 | **Multiple approvers per level** | Add `assigned_user_id` to `approval_steps`; current design supports one approver per role level |
-| **File storage growth** | Move from local `uploads/` to S3-compatible storage; change only `Document` model |
+| **File storage growth** | Move from local `uploads/` to S3-compatible storage; change only `Requisition` model |
 | **Database scaling** | Migrate from SQLite to PostgreSQL; `better-sqlite3` API maps cleanly to `pg` with parameterized queries |
 | **Notifications** | Add email/webhook notifications in approval controller without changing workflow logic |
 | **Audit compliance** | `approval_logs` table already captures full history; add export endpoint as needed |

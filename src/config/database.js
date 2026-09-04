@@ -111,13 +111,14 @@ const initializeDatabase = async () => {
   const initSqlJs = require('sql.js');
   SQL = await initSqlJs();
 
-  // Load existing DB file if present, otherwise create new
+  // Schema has changed significantly (documents → requisitions, users.territory).
+  // Drop the existing DB file so it is recreated with the new schema and seed data.
   if (fs.existsSync(dbPath)) {
-    const fileBuffer = fs.readFileSync(dbPath);
-    rawDb = new SQL.Database(fileBuffer);
-  } else {
-    rawDb = new SQL.Database();
+    fs.unlinkSync(dbPath);
+    logger.info('Removed old database file for schema migration');
   }
+
+  rawDb = new SQL.Database();
 
   logger.info('Initializing database...');
 
@@ -132,6 +133,7 @@ const initializeDatabase = async () => {
       password_hash TEXT NOT NULL,
       full_name TEXT NOT NULL,
       role_level INTEGER NOT NULL CHECK (role_level >= 1 AND role_level <= 6),
+      territory TEXT,
       is_active INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
@@ -139,7 +141,7 @@ const initializeDatabase = async () => {
   `);
 
   rawDb.run(`
-    CREATE TABLE IF NOT EXISTS documents (
+    CREATE TABLE IF NOT EXISTS requisitions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       description TEXT,
@@ -157,26 +159,26 @@ const initializeDatabase = async () => {
   rawDb.run(`
     CREATE TABLE IF NOT EXISTS approval_steps (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      document_id INTEGER NOT NULL,
+      requisition_id INTEGER NOT NULL,
       step_level INTEGER NOT NULL CHECK (step_level >= 1 AND step_level <= 6),
       status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
       assigned_role_level INTEGER NOT NULL,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (document_id) REFERENCES documents(id)
+      FOREIGN KEY (requisition_id) REFERENCES requisitions(id)
     )
   `);
 
   rawDb.run(`
     CREATE TABLE IF NOT EXISTS approval_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      document_id INTEGER NOT NULL,
+      requisition_id INTEGER NOT NULL,
       approval_step_id INTEGER,
       user_id INTEGER NOT NULL,
       action TEXT NOT NULL,
       comments TEXT,
       created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (document_id) REFERENCES documents(id),
+      FOREIGN KEY (requisition_id) REFERENCES requisitions(id),
       FOREIGN KEY (approval_step_id) REFERENCES approval_steps(id),
       FOREIGN KEY (user_id) REFERENCES users(id)
     )
@@ -204,20 +206,21 @@ const seedDefaultUsers = () => {
   const passwordHash = bcrypt.hashSync('cid2024', 10);
 
   const defaultUsers = [
-    { username: 'director', email: 'director@cid.org.co', full_name: 'Director General', role_level: 1 },
-    { username: 'subdirector', email: 'subdirector@cid.org.co', full_name: 'Subdirector', role_level: 2 },
-    { username: 'coord.financiero', email: 'financiero@cid.org.co', full_name: 'Coordinador Financiero', role_level: 3 },
-    { username: 'coord.proyectos', email: 'proyectos@cid.org.co', full_name: 'Coordinador de Proyectos', role_level: 4 },
-    { username: 'analista', email: 'analista@cid.org.co', full_name: 'Analista', role_level: 5 },
-    { username: 'revisor', email: 'revisor@cid.org.co', full_name: 'Revisor', role_level: 6 },
+    { username: 'coord.territorio', email: 'coord.territorio@cid.org.co', full_name: 'Coordinador de Territorio', role_level: 1, territory: 'Chocó' },
+    { username: 'coord.territorio2', email: 'coord.territorio2@cid.org.co', full_name: 'Coordinador de Territorio', role_level: 1, territory: 'Santander' },
+    { username: 'subdirector', email: 'subdirector@cid.org.co', full_name: 'Subdirector', role_level: 2, territory: null },
+    { username: 'coord.financiero', email: 'financiero@cid.org.co', full_name: 'Coordinador Financiero', role_level: 3, territory: null },
+    { username: 'coord.proyectos', email: 'proyectos@cid.org.co', full_name: 'Coordinador de Proyectos', role_level: 4, territory: null },
+    { username: 'analista', email: 'analista@cid.org.co', full_name: 'Analista', role_level: 5, territory: null },
+    { username: 'revisor', email: 'revisor@cid.org.co', full_name: 'Revisor', role_level: 6, territory: null },
   ];
 
   rawDb.run('BEGIN TRANSACTION');
   try {
     for (const user of defaultUsers) {
       rawDb.run(
-        'INSERT INTO users (username, email, password_hash, full_name, role_level) VALUES (?, ?, ?, ?, ?)',
-        [user.username, user.email, passwordHash, user.full_name, user.role_level],
+        'INSERT INTO users (username, email, password_hash, full_name, role_level, territory) VALUES (?, ?, ?, ?, ?, ?)',
+        [user.username, user.email, passwordHash, user.full_name, user.role_level, user.territory],
       );
     }
     rawDb.run('COMMIT');
