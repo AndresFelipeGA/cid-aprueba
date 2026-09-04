@@ -17,8 +17,8 @@ const App = (() => {
   // --- Role Level Mapping ---
   const ROLE_NAMES = {
     1: 'Coordinador de Territorio',
-    2: 'Subdirector',
-    3: 'Coordinador Financiero',
+    2: 'Director/a Programática',
+    3: 'Representante Legal',
     4: 'Coordinador de Proyectos',
     5: 'Analista',
     6: 'Revisor',

@@ -208,8 +208,8 @@ const seedDefaultUsers = () => {
   const defaultUsers = [
     { username: 'coord.territorio', email: 'coord.territorio@cid.org.co', full_name: 'Coordinador de Territorio', role_level: 1, territory: 'Chocó' },
     { username: 'coord.territorio2', email: 'coord.territorio2@cid.org.co', full_name: 'Coordinador de Territorio', role_level: 1, territory: 'Santander' },
-    { username: 'subdirector', email: 'subdirector@cid.org.co', full_name: 'Subdirector', role_level: 2, territory: null },
-    { username: 'coord.financiero', email: 'financiero@cid.org.co', full_name: 'Coordinador Financiero', role_level: 3, territory: null },
+    { username: 'dir.programatica', email: 'dir.programatica@cid.org.co', full_name: 'Director/a Programática', role_level: 2, territory: null },
+    { username: 'rep.legal', email: 'rep.legal@cid.org.co', full_name: 'Representante Legal', role_level: 3, territory: null },
     { username: 'coord.proyectos', email: 'proyectos@cid.org.co', full_name: 'Coordinador de Proyectos', role_level: 4, territory: null },
     { username: 'analista', email: 'analista@cid.org.co', full_name: 'Analista', role_level: 5, territory: null },
     { username: 'revisor', email: 'revisor@cid.org.co', full_name: 'Revisor', role_level: 6, territory: null },
