@@ -9,6 +9,7 @@ const App = (() => {
   let currentUser = null;
   let currentView = 'dashboard';
   let currentParams = {};
+  let _lastUploadedFileInfo = null; // For auto-preview after upload
 
   // --- DOM References ---
   const $ = (sel) => document.querySelector(sel);
@@ -633,14 +634,25 @@ const App = (() => {
   async function showFilePreviewPanel(fetchFn, filename) {
     const panel = document.querySelector('#file-preview');
     const content = document.querySelector('#file-preview-content');
+    const titleEl = document.querySelector('#file-preview-title');
     if (!panel || !content) return;
 
     const ext = getFileExtension(filename);
     const imageExts = ['jpg', 'jpeg', 'png'];
     const pdfExts = ['pdf'];
 
+    // Update title with filename
+    if (titleEl) {
+      titleEl.textContent = filename || 'Vista previa';
+      titleEl.title = filename || '';
+    }
+
     panel.classList.remove('hidden');
-    content.innerHTML = '<div class="loading"><div class="loading__spinner"></div> Cargando vista previa...</div>';
+    content.innerHTML = `
+      <div class="file-preview__loading">
+        <div class="loading__spinner"></div>
+        <span>Cargando vista previa...</span>
+      </div>`;
 
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
@@ -651,7 +663,7 @@ const App = (() => {
         const blobUrl = URL.createObjectURL(blob);
         content.innerHTML = `<iframe src="${blobUrl}#toolbar=1&navpanes=0&scrollbar=1&view=FitH" class="file-preview__iframe" title="Vista previa PDF"></iframe><div class="file-preview__fname">${escapeHtml(filename)}</div>`;
       } catch (_err) {
-        content.innerHTML = '<div class="file-preview__message">Error al cargar la vista previa del archivo.</div>';
+        content.innerHTML = '<div class="file-preview__message"><p>Error al cargar la vista previa del archivo.</p></div>';
       }
     } else if (imageExts.includes(ext)) {
       try {
@@ -660,7 +672,7 @@ const App = (() => {
         const blobUrl = URL.createObjectURL(blob);
         content.innerHTML = `<img src="${blobUrl}" alt="${escapeHtml(filename)}" class="file-preview__image"><div class="file-preview__fname">${escapeHtml(filename)}</div>`;
       } catch (_err) {
-        content.innerHTML = '<div class="file-preview__message">Error al cargar la vista previa de la imagen.</div>';
+        content.innerHTML = '<div class="file-preview__message"><p>Error al cargar la vista previa de la imagen.</p></div>';
       }
     } else {
       content.innerHTML = `<div class="file-preview__message"><p>Vista previa no disponible para este tipo de archivo.</p><div class="file-preview__fname">${escapeHtml(filename)}</div></div>`;
@@ -834,8 +846,8 @@ const App = (() => {
       html += `
         <div class="file-preview hidden" id="file-preview">
           <div class="file-preview__header">
-            <span class="file-preview__title">Vista previa</span>
-            <button class="file-preview__close" data-action="close-preview">\u2715</button>
+            <span class="file-preview__title" id="file-preview-title" title="">Vista previa</span>
+            <button class="file-preview__close" data-action="close-preview" title="Cerrar vista previa">&times;</button>
           </div>
           <div class="file-preview__content" id="file-preview-content">
           </div>
@@ -846,6 +858,15 @@ const App = (() => {
       html += `</div>`; // close req-detail grid
 
       container.innerHTML = html;
+
+      // Auto-preview if a file was just uploaded
+      if (_lastUploadedFileInfo) {
+        const info = _lastUploadedFileInfo;
+        _lastUploadedFileInfo = null;
+        setTimeout(() => {
+          showFilePreviewPanel(info.fetchFn, info.filename);
+        }, 400);
+      }
     } catch (err) {
       showError(container, err.message || 'Error al cargar la requisición');
     }
@@ -1293,7 +1314,15 @@ const App = (() => {
     if (feedback) feedback.innerHTML = '';
 
     try {
-      await API.createQuotation(requisitionId, formData);
+      const result = await API.createQuotation(requisitionId, formData);
+      // Store info for auto-preview after re-render
+      const createdQuotation = result && result.data && result.data.quotation;
+      if (createdQuotation) {
+        _lastUploadedFileInfo = {
+          fetchFn: () => API.downloadQuotationFile(requisitionId, createdQuotation.id),
+          filename: createdQuotation.original_filename || fileInput.files[0].name,
+        };
+      }
       navigate('requisition-detail', { id: requisitionId });
     } catch (err) {
       if (feedback) feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al crear la cotización')}</div>`;
@@ -1323,7 +1352,15 @@ const App = (() => {
     formData.append('file', fileInput.files[0]);
 
     try {
-      await API.uploadQuotationDocument(requisitionId, quotationId, formData);
+      const result = await API.uploadQuotationDocument(requisitionId, quotationId, formData);
+      // Store info for auto-preview after re-render
+      const createdDoc = result && result.data && result.data.document;
+      if (createdDoc) {
+        _lastUploadedFileInfo = {
+          fetchFn: () => API.downloadQuotationDocument(requisitionId, quotationId, createdDoc.id),
+          filename: createdDoc.original_filename || fileInput.files[0].name,
+        };
+      }
       navigate('requisition-detail', { id: requisitionId });
     } catch (err) {
       alert(err.message || 'Error al adjuntar el documento');
