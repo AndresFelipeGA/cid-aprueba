@@ -56,6 +56,7 @@ const authController = {
           full_name: user.full_name,
           role_level: user.role_level,
           territory: user.territory || null,
+          gender: user.gender || null,
         },
       },
       message: 'Login successful',
@@ -77,7 +78,7 @@ const authController = {
 
   updateProfile(req, res) {
     const userId = req.user.id;
-    const { email, full_name } = req.body;
+    const { email, full_name, gender } = req.body;
 
     // Check if email is already taken by another user
     if (email) {
@@ -90,6 +91,7 @@ const authController = {
     const updatedUser = User.update(userId, {
       email: email || undefined,
       fullName: full_name || undefined,
+      gender: gender !== undefined ? (gender || null) : undefined,
     });
 
     if (!updatedUser) {

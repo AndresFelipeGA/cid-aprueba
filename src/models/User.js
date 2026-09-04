@@ -3,7 +3,7 @@ const db = require('../config/database');
 const User = {
   findById(id) {
     return db.prepare(
-      'SELECT id, username, email, full_name, role_level, territory, is_active, created_at, updated_at FROM users WHERE id = ?'
+      'SELECT id, username, email, full_name, role_level, territory, gender, is_active, created_at, updated_at FROM users WHERE id = ?'
     ).get(id);
   },
 
@@ -21,19 +21,19 @@ const User = {
 
   findAll() {
     return db.prepare(
-      'SELECT id, username, email, full_name, role_level, territory, is_active, created_at, updated_at FROM users WHERE is_active = 1 ORDER BY role_level ASC'
+      'SELECT id, username, email, full_name, role_level, territory, gender, is_active, created_at, updated_at FROM users WHERE is_active = 1 ORDER BY role_level ASC'
     ).all();
   },
 
   findByRoleLevel(roleLevel) {
     return db.prepare(
-      'SELECT id, username, email, full_name, role_level, territory, is_active, created_at, updated_at FROM users WHERE role_level = ? AND is_active = 1'
+      'SELECT id, username, email, full_name, role_level, territory, gender, is_active, created_at, updated_at FROM users WHERE role_level = ? AND is_active = 1'
     ).all(roleLevel);
   },
 
   findByTerritory(territory) {
     return db.prepare(
-      'SELECT id, username, email, full_name, role_level, territory, is_active, created_at, updated_at FROM users WHERE territory = ? AND is_active = 1'
+      'SELECT id, username, email, full_name, role_level, territory, gender, is_active, created_at, updated_at FROM users WHERE territory = ? AND is_active = 1'
     ).all(territory);
   },
 
@@ -46,7 +46,7 @@ const User = {
     return User.findById(result.lastInsertRowid);
   },
 
-  update(id, { fullName, email, roleLevel, isActive, territory }) {
+  update(id, { fullName, email, roleLevel, isActive, territory, gender }) {
     const fields = [];
     const values = [];
 
@@ -69,6 +69,10 @@ const User = {
     if (territory !== undefined) {
       fields.push('territory = ?');
       values.push(territory);
+    }
+    if (gender !== undefined) {
+      fields.push('gender = ?');
+      values.push(gender);
     }
 
     if (fields.length === 0) return User.findById(id);

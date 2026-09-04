@@ -45,7 +45,7 @@ const requisitionController = {
   create(req, res) {
     // Only Coordinadores de Territorio (role_level 1) can create requisitions
     if (req.user.role_level !== 1) {
-      throw new AppError('Solo los Coordinadores de Territorio pueden crear requisiciones', 403, 'FORBIDDEN');
+      throw new AppError('Solo los Coordinadores/as de Territorio pueden crear requisiciones', 403, 'FORBIDDEN');
     }
 
     const { title, description } = req.body;

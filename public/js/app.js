@@ -14,14 +14,14 @@ const App = (() => {
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
 
-  // --- Role Level Mapping ---
-  const ROLE_NAMES = {
-    1: 'Coordinador de Territorio',
-    2: 'Director/a Programática',
-    3: 'Representante Legal',
-    4: 'Encargad@ de Compras',
-    5: 'Analista',
-    6: 'Revisor',
+  // --- Role Level Mapping (gendered) ---
+  const ROLE_NAMES_GENDERED = {
+    1: { M: 'Coordinador de Territorio', F: 'Coordinadora de Territorio', default: 'Coordinador/a de Territorio' },
+    2: { M: 'Director Programático', F: 'Directora Programática', default: 'Director/a Programática' },
+    3: { default: 'Representante Legal' },
+    4: { M: 'Encargado de Compras', F: 'Encargada de Compras', default: 'Encargado/a de Compras' },
+    5: { default: 'Analista' },
+    6: { M: 'Revisor', F: 'Revisora', default: 'Revisor/a' },
   };
 
   // --- Helpers ---
@@ -73,16 +73,19 @@ const App = (() => {
     return labels[action] || action;
   }
 
-  function roleName(level) {
-    return ROLE_NAMES[level] || `Nivel ${level}`;
+  function roleName(level, gender) {
+    const entry = ROLE_NAMES_GENDERED[level];
+    if (!entry) return `Nivel ${level}`;
+    if (gender && entry[gender]) return entry[gender];
+    return entry.default;
   }
 
-  function levelLabel(level) {
-    return roleName(level);
+  function levelLabel(level, gender) {
+    return roleName(level, gender);
   }
 
   function roleDisplay(user) {
-    let display = roleName(user.role_level);
+    let display = roleName(user.role_level, user.gender);
     if (user.territory) {
       display += ` - ${user.territory}`;
     }
@@ -635,7 +638,7 @@ const App = (() => {
       const requisition = result.data.requisition;
       const steps = requisition.approval_steps || [];
       const logs = requisition.approval_logs || [];
-      const quotations = result.data.quotations || [];
+      const quotations = requisition.quotations || [];
 
       const canAct = currentUser &&
         currentUser.role_level === requisition.current_approval_level &&
@@ -688,7 +691,7 @@ const App = (() => {
       if (canAct) {
         html += `
             <div class="approval-panel" id="approval-panel">
-              <h3 class="approval-panel__title">Accion de aprobacion — ${levelLabel(requisition.current_approval_level)}</h3>
+              <h3 class="approval-panel__title">Accion de aprobacion — ${levelLabel(requisition.current_approval_level, currentUser.gender)}</h3>
               <div class="form__group">
                 <label class="form__label" for="approval-comments">Comentarios</label>
                 <textarea class="form__input" id="approval-comments" rows="3" placeholder="Comentarios opcionales para aprobacion, obligatorios para rechazo..."></textarea>
@@ -726,10 +729,21 @@ const App = (() => {
           itemClass = 'timeline__item--current';
         }
 
+        // Determine gender for this step's role label:
+        // - If there's a log entry (completed step), use the acting user's gender
+        // - If it's the current user's level, use their gender
+        // - Otherwise use neutral (no gender)
+        let stepGender = null;
+        if (stepLog && stepLog.user_gender) {
+          stepGender = stepLog.user_gender;
+        } else if (currentUser && step.step_level === currentUser.role_level) {
+          stepGender = currentUser.gender;
+        }
+
         html += `
           <li class="timeline__item ${itemClass}">
             <div class="timeline__dot"></div>
-            <div class="timeline__level">${levelLabel(step.step_level)}</div>
+            <div class="timeline__level">${levelLabel(step.step_level, stepGender)}</div>
             <div class="timeline__status">${statusLabel(step.status)}${stepLog ? ` — ${escapeHtml(stepLog.user_name)}` : ''}</div>
             ${stepLog && stepLog.comments ? `<div class="timeline__comment">"${escapeHtml(stepLog.comments)}"</div>` : ''}
             ${stepLog ? `<div class="timeline__status">${formatDateShort(stepLog.created_at)}</div>` : ''}
@@ -778,7 +792,7 @@ const App = (() => {
     // Client-side guard: only role_level 1 can create requisitions
     if (!currentUser || currentUser.role_level !== 1) {
       container.innerHTML = `
-        <div class="alert alert--error">No tiene permisos para crear requisiciones. Solo los Coordinadores de Territorio pueden crear requisiciones.</div>
+        <div class="alert alert--error">No tiene permisos para crear requisiciones. Solo los Coordinadores/as de Territorio pueden crear requisiciones.</div>
       `;
       setTimeout(() => navigate('dashboard'), 2000);
       return;
@@ -1000,6 +1014,8 @@ const App = (() => {
       return;
     }
 
+    const genderValue = user.gender || '';
+
     let html = `
       <div class="profile">
         <div class="profile__card">
@@ -1019,8 +1035,16 @@ const App = (() => {
               <input class="form__input" type="email" id="profile-email" value="${escapeHtml(user.email || '')}" required placeholder="ejemplo@correo.com">
             </div>
             <div class="form__group">
+              <label class="form__label" for="profile-gender">Genero</label>
+              <select class="form__input" id="profile-gender">
+                <option value=""${genderValue === '' ? ' selected' : ''}>Prefiero no decir</option>
+                <option value="M"${genderValue === 'M' ? ' selected' : ''}>Masculino</option>
+                <option value="F"${genderValue === 'F' ? ' selected' : ''}>Femenino</option>
+              </select>
+            </div>
+            <div class="form__group">
               <label class="form__label">Rol</label>
-              <input class="form__input" type="text" value="${escapeHtml(roleName(user.role_level))}" disabled>
+              <input class="form__input" type="text" value="${escapeHtml(roleName(user.role_level, user.gender))}" disabled>
             </div>
             ${user.territory ? `
             <div class="form__group">
@@ -1045,6 +1069,8 @@ const App = (() => {
 
     const fullName = $('#profile-fullname').value.trim();
     const email = $('#profile-email').value.trim();
+    const genderSelect = $('#profile-gender');
+    const gender = genderSelect ? genderSelect.value : '';
     const btn = $('#profile-save-btn');
     const feedback = $('#profile-feedback');
 
@@ -1063,15 +1089,19 @@ const App = (() => {
     feedback.innerHTML = '';
 
     try {
-      const result = await API.updateProfile({ email, full_name: fullName });
+      const result = await API.updateProfile({ email, full_name: fullName, gender: gender || null });
       currentUser = result.data.user;
 
       // Update header
       if (currentUser) {
         $('#user-name').textContent = currentUser.full_name;
+        $('#user-role').textContent = roleDisplay(currentUser);
       }
 
       feedback.innerHTML = '<div class="alert alert--success">Perfil actualizado exitosamente</div>';
+
+      // Re-render profile to update the role display field
+      renderProfile($('#main-content'));
     } catch (err) {
       feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al actualizar el perfil')}</div>`;
     } finally {

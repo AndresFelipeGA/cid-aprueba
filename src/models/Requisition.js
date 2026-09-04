@@ -98,7 +98,7 @@ const Requisition = {
     `).all(id);
 
     const approvalLogs = db.prepare(`
-      SELECT al.*, u.full_name AS user_name, u.username
+      SELECT al.*, u.full_name AS user_name, u.username, u.gender AS user_gender, u.role_level AS user_role_level
       FROM approval_logs al
       JOIN users u ON al.user_id = u.id
       WHERE al.requisition_id = ?

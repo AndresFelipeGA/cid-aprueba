@@ -32,6 +32,7 @@ router.put(
   [
     body('email').optional().isEmail().withMessage('Invalid email format').normalizeEmail(),
     body('full_name').optional().trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
+    body('gender').optional({ nullable: true }).isIn(['M', 'F', '', null]).withMessage('Gender must be M, F, or empty'),
   ],
   validate,
   asyncHandler(authController.updateProfile),
