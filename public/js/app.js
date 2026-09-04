@@ -52,7 +52,7 @@ const App = (() => {
   function statusLabel(status) {
     const labels = {
       pending: 'Pendiente',
-      in_review: 'En revision',
+      in_review: 'En revisión',
       approved: 'Aprobado',
       rejected: 'Rechazado',
       uploaded: 'Subido',
@@ -66,9 +66,9 @@ const App = (() => {
 
   function actionLabel(action) {
     const labels = {
-      approved: 'Aprobo',
-      rejected: 'Rechazo',
-      uploaded: 'Subio',
+      approved: 'Aprobó',
+      rejected: 'Rechazó',
+      uploaded: 'Subió',
     };
     return labels[action] || action;
   }
@@ -118,6 +118,11 @@ const App = (() => {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  function getFileExtension(filename) {
+    if (!filename) return '';
+    return filename.split('.').pop().toLowerCase();
   }
 
   // --- Sidebar Visibility ---
@@ -264,7 +269,7 @@ const App = (() => {
     const btn = $('#email-modal-save');
 
     if (!email) {
-      feedback.innerHTML = '<div class="alert alert--error">Ingrese un correo electronico valido</div>';
+      feedback.innerHTML = '<div class="alert alert--error">Ingrese un correo electrónico válido</div>';
       return;
     }
 
@@ -295,7 +300,7 @@ const App = (() => {
     const errorEl = $('#login-error');
 
     if (!username || !password) {
-      errorEl.textContent = 'Ingrese usuario y contrasena';
+      errorEl.textContent = 'Ingrese usuario y contraseña';
       errorEl.classList.remove('hidden');
       return;
     }
@@ -309,7 +314,7 @@ const App = (() => {
       currentUser = result.data.user;
       showApp();
     } catch (err) {
-      errorEl.textContent = err.message || 'Error al iniciar sesion';
+      errorEl.textContent = err.message || 'Error al iniciar sesión';
       errorEl.classList.remove('hidden');
     } finally {
       btn.disabled = false;
@@ -440,7 +445,7 @@ const App = (() => {
             <table class="table">
               <thead>
                 <tr>
-                  <th>Titulo</th>
+                  <th>Título</th>
                   <th>Estado</th>
                   <th>Nivel</th>
                   <th>Subido por</th>
@@ -573,7 +578,7 @@ const App = (() => {
           <span class="quotation-card__provider">Cotización: ${escapeHtml(quotation.provider_name)}</span>
         </div>
         <div class="quotation-card__file">
-          <span>📄 ${escapeHtml(quotation.original_filename)}</span>
+          <span class="quotation-card__filename" data-action="preview-quotation-file" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-filename="${escapeHtml(quotation.original_filename)}" title="Clic para vista previa">📄 ${escapeHtml(quotation.original_filename)}</span>
           <div class="quotation-card__actions">
             <button class="btn btn--outline btn--sm" data-action="download-quotation" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-filename="${escapeHtml(quotation.original_filename)}">Descargar</button>
             ${canEdit ? `<button class="btn btn--danger btn--sm" data-action="delete-quotation" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}">Eliminar</button>` : ''}
@@ -588,7 +593,7 @@ const App = (() => {
       if (doc) {
         html += `
           <div class="quotation-card__doc-item">
-            <span class="quotation-card__doc-status quotation-card__doc-status--complete">✅ ${docType.label}: ${escapeHtml(doc.original_filename)}</span>
+            <span class="quotation-card__doc-status quotation-card__doc-status--complete quotation-card__doc-filename" data-action="preview-quotation-doc" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-doc-id="${doc.id}" data-filename="${escapeHtml(doc.original_filename)}" title="Clic para vista previa">✅ ${docType.label}: ${escapeHtml(doc.original_filename)}</span>
             <div class="quotation-card__actions">
               <button class="btn btn--outline btn--sm" data-action="download-quotation-doc" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-doc-id="${doc.id}" data-filename="${escapeHtml(doc.original_filename)}">Descargar</button>
               ${canEdit ? `<button class="btn btn--danger btn--sm" data-action="delete-quotation-doc" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-doc-id="${doc.id}">Eliminar</button>` : ''}
@@ -623,6 +628,54 @@ const App = (() => {
     return html;
   }
 
+  // --- File Preview ---
+
+  async function showFilePreviewPanel(fetchFn, filename) {
+    const panel = document.querySelector('#file-preview');
+    const content = document.querySelector('#file-preview-content');
+    if (!panel || !content) return;
+
+    const ext = getFileExtension(filename);
+    const imageExts = ['jpg', 'jpeg', 'png'];
+    const pdfExts = ['pdf'];
+
+    panel.classList.remove('hidden');
+    content.innerHTML = '<div class="loading"><div class="loading__spinner"></div> Cargando vista previa...</div>';
+
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    if (pdfExts.includes(ext)) {
+      try {
+        const response = await fetchFn();
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        content.innerHTML = `<iframe src="${blobUrl}#toolbar=1&navpanes=0&scrollbar=1&view=FitH" class="file-preview__iframe" title="Vista previa PDF"></iframe><div class="file-preview__fname">${escapeHtml(filename)}</div>`;
+      } catch (_err) {
+        content.innerHTML = '<div class="file-preview__message">Error al cargar la vista previa del archivo.</div>';
+      }
+    } else if (imageExts.includes(ext)) {
+      try {
+        const response = await fetchFn();
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        content.innerHTML = `<img src="${blobUrl}" alt="${escapeHtml(filename)}" class="file-preview__image"><div class="file-preview__fname">${escapeHtml(filename)}</div>`;
+      } catch (_err) {
+        content.innerHTML = '<div class="file-preview__message">Error al cargar la vista previa de la imagen.</div>';
+      }
+    } else {
+      content.innerHTML = `<div class="file-preview__message"><p>Vista previa no disponible para este tipo de archivo.</p><div class="file-preview__fname">${escapeHtml(filename)}</div></div>`;
+    }
+  }
+
+  function closeFilePreview() {
+    const panel = document.querySelector('#file-preview');
+    if (panel) {
+      panel.classList.add('hidden');
+      const content = document.querySelector('#file-preview-content');
+      if (content) content.innerHTML = '';
+    }
+  }
+
   // --- Requisition Detail View ---
 
   async function renderRequisitionDetail(container, id) {
@@ -648,7 +701,7 @@ const App = (() => {
         <a href="#" class="back-link" data-action="navigate" data-view="requisitions">&larr; Volver a requisiciones</a>
 
         <div class="req-detail">
-          <div>
+          <div class="req-detail__left">
             <div class="req-detail__info">
               <h2 class="req-detail__title">${escapeHtml(requisition.title)}</h2>
               <ul class="req-detail__meta">
@@ -666,14 +719,14 @@ const App = (() => {
                 </li>
                 <li>
                   <span class="req-detail__meta-label">Archivo</span>
-                  <span class="req-detail__meta-value">${escapeHtml(requisition.original_filename)}</span>
+                  <span class="req-detail__meta-value req-detail__file-link" data-action="preview-requisition-file" data-id="${requisition.id}" data-filename="${escapeHtml(requisition.original_filename)}" title="Clic para vista previa">${escapeHtml(requisition.original_filename)}</span>
                 </li>
                 <li>
                   <span class="req-detail__meta-label">Fecha de creación</span>
                   <span class="req-detail__meta-value">${formatDate(requisition.created_at)}</span>
                 </li>
                 <li>
-                  <span class="req-detail__meta-label">Ultima actualizacion</span>
+                  <span class="req-detail__meta-label">Última actualización</span>
                   <span class="req-detail__meta-value">${formatDate(requisition.updated_at)}</span>
                 </li>
               </ul>
@@ -691,10 +744,10 @@ const App = (() => {
       if (canAct) {
         html += `
             <div class="approval-panel" id="approval-panel">
-              <h3 class="approval-panel__title">Accion de aprobacion — ${levelLabel(requisition.current_approval_level, currentUser.gender)}</h3>
+              <h3 class="approval-panel__title">Acción de aprobación — ${levelLabel(requisition.current_approval_level, currentUser.gender)}</h3>
               <div class="form__group">
                 <label class="form__label" for="approval-comments">Comentarios</label>
-                <textarea class="form__input" id="approval-comments" rows="3" placeholder="Comentarios opcionales para aprobacion, obligatorios para rechazo..."></textarea>
+                <textarea class="form__input" id="approval-comments" rows="3" placeholder="Comentarios opcionales para aprobación, obligatorios para rechazo..."></textarea>
               </div>
               <div id="approval-feedback"></div>
               <div class="approval-panel__actions">
@@ -707,11 +760,11 @@ const App = (() => {
 
       html += `</div>`; // close left column
 
-      // Timeline column
-      html += `<div>`;
+      // Timeline column (right)
+      html += `<div class="req-detail__right">`;
       html += `
         <div class="timeline">
-          <h3 class="timeline__title">Linea de aprobacion</h3>
+          <h3 class="timeline__title">Línea de aprobación</h3>
           <ul class="timeline__list">
       `;
 
@@ -759,7 +812,7 @@ const App = (() => {
       // Approval logs history
       if (logs.length > 0) {
         html += `
-          <div class="timeline" style="margin-top: 24px;">
+          <div class="timeline">
             <h3 class="timeline__title">Historial de acciones</h3>
             <div class="activity-list" style="border: none; box-shadow: none;">
         `;
@@ -776,6 +829,18 @@ const App = (() => {
         }
         html += `</div></div>`;
       }
+
+      // File preview panel
+      html += `
+        <div class="file-preview hidden" id="file-preview">
+          <div class="file-preview__header">
+            <span class="file-preview__title">Vista previa</span>
+            <button class="file-preview__close" data-action="close-preview">\u2715</button>
+          </div>
+          <div class="file-preview__content" id="file-preview-content">
+          </div>
+        </div>
+      `;
 
       html += `</div>`; // close right column
       html += `</div>`; // close req-detail grid
@@ -807,17 +872,17 @@ const App = (() => {
           <div id="upload-feedback"></div>
           <form id="upload-form">
             <div class="form__group">
-              <label class="form__label" for="upload-title">Titulo</label>
-              <input class="form__input" type="text" id="upload-title" required maxlength="255" placeholder="Titulo de la requisición">
+              <label class="form__label" for="upload-title">Título</label>
+              <input class="form__input" type="text" id="upload-title" required maxlength="255" placeholder="Título de la requisición">
             </div>
             <div class="form__group">
-              <label class="form__label" for="upload-description">Descripcion</label>
-              <textarea class="form__input" id="upload-description" rows="3" maxlength="1000" placeholder="Descripcion opcional de la requisición"></textarea>
+              <label class="form__label" for="upload-description">Descripción</label>
+              <textarea class="form__input" id="upload-description" rows="3" maxlength="1000" placeholder="Descripción opcional de la requisición"></textarea>
             </div>
             <div class="form__group">
               <label class="form__label">Archivo</label>
               <div class="upload-form__file-area" id="file-drop-area">
-                <div class="upload-form__file-text">Haz clic o arrastra un archivo aqui</div>
+                <div class="upload-form__file-text">Haz clic o arrastra un archivo aquí</div>
                 <input type="file" id="upload-file" style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.svg,.webp,.bmp">
                 <div class="upload-form__file-name" id="file-name"></div>
               </div>
@@ -974,7 +1039,7 @@ const App = (() => {
     const feedback = $('#upload-feedback');
 
     if (!title) {
-      feedback.innerHTML = '<div class="alert alert--error">El titulo es obligatorio</div>';
+      feedback.innerHTML = '<div class="alert alert--error">El título es obligatorio</div>';
       return;
     }
 
@@ -1010,7 +1075,7 @@ const App = (() => {
   function renderProfile(container) {
     const user = currentUser;
     if (!user) {
-      showError(container, 'No se pudo cargar la informacion del usuario');
+      showError(container, 'No se pudo cargar la información del usuario');
       return;
     }
 
@@ -1019,7 +1084,7 @@ const App = (() => {
     let html = `
       <div class="profile">
         <div class="profile__card">
-          <h2 class="profile__title">Informacion del Usuario</h2>
+          <h2 class="profile__title">Información del Usuario</h2>
           <div id="profile-feedback"></div>
           <form id="profile-form">
             <div class="form__group">
@@ -1031,11 +1096,11 @@ const App = (() => {
               <input class="form__input" type="text" id="profile-fullname" value="${escapeHtml(user.full_name)}" required minlength="2" placeholder="Nombre completo">
             </div>
             <div class="form__group">
-              <label class="form__label" for="profile-email">Correo electronico</label>
+              <label class="form__label" for="profile-email">Correo electrónico</label>
               <input class="form__input" type="email" id="profile-email" value="${escapeHtml(user.email || '')}" required placeholder="ejemplo@correo.com">
             </div>
             <div class="form__group">
-              <label class="form__label" for="profile-gender">Genero</label>
+              <label class="form__label" for="profile-gender">Género</label>
               <select class="form__input" id="profile-gender">
                 <option value=""${genderValue === '' ? ' selected' : ''}>Prefiero no decir</option>
                 <option value="M"${genderValue === 'M' ? ' selected' : ''}>Masculino</option>
@@ -1080,7 +1145,7 @@ const App = (() => {
     }
 
     if (!email) {
-      feedback.innerHTML = '<div class="alert alert--error">Ingrese un correo electronico valido</div>';
+      feedback.innerHTML = '<div class="alert alert--error">Ingrese un correo electrónico válido</div>';
       return;
     }
 
@@ -1443,6 +1508,37 @@ const App = (() => {
         const docId = target.dataset.docId;
         const filename = target.dataset.filename;
         handleDownloadQuotationDoc(reqId, quotationId, docId, filename);
+      }
+
+      // --- File Preview actions ---
+
+      if (action === 'close-preview') {
+        e.preventDefault();
+        closeFilePreview();
+      }
+
+      if (action === 'preview-requisition-file') {
+        e.preventDefault();
+        const id = target.dataset.id;
+        const filename = target.dataset.filename;
+        showFilePreviewPanel(() => API.downloadRequisition(id), filename);
+      }
+
+      if (action === 'preview-quotation-file') {
+        e.preventDefault();
+        const reqId = target.dataset.reqId;
+        const quotationId = target.dataset.quotationId;
+        const filename = target.dataset.filename;
+        showFilePreviewPanel(() => API.downloadQuotationFile(reqId, quotationId), filename);
+      }
+
+      if (action === 'preview-quotation-doc') {
+        e.preventDefault();
+        const reqId = target.dataset.reqId;
+        const quotationId = target.dataset.quotationId;
+        const docId = target.dataset.docId;
+        const filename = target.dataset.filename;
+        showFilePreviewPanel(() => API.downloadQuotationDocument(reqId, quotationId, docId), filename);
       }
     });
 

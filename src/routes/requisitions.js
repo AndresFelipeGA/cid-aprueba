@@ -54,6 +54,18 @@ const upload = multer({
   },
 });
 
+// Middleware to fix multer filename encoding (Latin-1 → UTF-8)
+const fixUploadFilename = (req, res, next) => {
+  if (req.file && req.file.originalname) {
+    try {
+      req.file.originalname = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+    } catch (e) {
+      // Keep original if conversion fails
+    }
+  }
+  next();
+};
+
 // GET /api/requisitions
 router.get(
   '/',
@@ -73,6 +85,7 @@ router.post(
   '/',
   authenticate,
   upload.single('file'),
+  fixUploadFilename,
   [
     body('title').trim().notEmpty().withMessage('El título es requerido').isLength({ max: 255 }).withMessage('El título debe tener máximo 255 caracteres'),
     body('description').optional().trim().isLength({ max: 1000 }).withMessage('La descripción debe tener máximo 1000 caracteres'),

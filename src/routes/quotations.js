@@ -54,6 +54,18 @@ const upload = multer({
   },
 });
 
+// Middleware to fix multer filename encoding (Latin-1 → UTF-8)
+const fixUploadFilename = (req, res, next) => {
+  if (req.file && req.file.originalname) {
+    try {
+      req.file.originalname = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+    } catch (e) {
+      // Keep original if conversion fails
+    }
+  }
+  next();
+};
+
 // GET /api/requisitions/:requisitionId/quotations
 router.get(
   '/:requisitionId/quotations',
@@ -70,6 +82,7 @@ router.post(
   '/:requisitionId/quotations',
   authenticate,
   upload.single('file'),
+  fixUploadFilename,
   [
     param('requisitionId').isInt().withMessage('El ID de requisición debe ser un número entero'),
     body('provider_name').trim().notEmpty().withMessage('El nombre del proveedor es requerido').isLength({ min: 2 }).withMessage('El nombre del proveedor debe tener al menos 2 caracteres'),
@@ -95,6 +108,7 @@ router.post(
   '/:requisitionId/quotations/:quotationId/documents',
   authenticate,
   upload.single('file'),
+  fixUploadFilename,
   [
     param('requisitionId').isInt().withMessage('El ID de requisición debe ser un número entero'),
     param('quotationId').isInt().withMessage('El ID de cotización debe ser un número entero'),
