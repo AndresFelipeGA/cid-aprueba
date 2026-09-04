@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const Quotation = require('./Quotation');
 
 const Requisition = {
   findById(id) {
@@ -104,10 +105,14 @@ const Requisition = {
       ORDER BY al.created_at DESC
     `).all(id);
 
+    // Add quotations with their documents
+    const quotations = Quotation.findByRequisition(id);
+
     return {
       ...requisition,
       approval_steps: approvalSteps,
       approval_logs: approvalLogs,
+      quotations,
     };
   },
 

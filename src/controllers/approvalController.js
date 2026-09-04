@@ -2,6 +2,7 @@ const db = require('../config/database');
 const Requisition = require('../models/Requisition');
 const ApprovalStep = require('../models/ApprovalStep');
 const ApprovalLog = require('../models/ApprovalLog');
+const Quotation = require('../models/Quotation');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 
@@ -37,6 +38,14 @@ const approvalController = {
     const step = ApprovalStep.findByRequisitionAndLevel(requisitionId, requisition.current_approval_level);
     if (!step) {
       throw new AppError('Paso de aprobación no encontrado', 404, 'STEP_NOT_FOUND');
+    }
+
+    // At level 4, require at least one complete quotation before approving
+    if (requisition.current_approval_level === 4) {
+      const hasComplete = Quotation.hasCompleteQuotation(requisitionId);
+      if (!hasComplete) {
+        throw new AppError('Debe adjuntar al menos una cotización completa con todos los documentos del proveedor (RUT, Cámara de Comercio, Cédula y Certificado Bancario) antes de aprobar', 400, 'INCOMPLETE_QUOTATION');
+      }
     }
 
     // Use a transaction for atomicity

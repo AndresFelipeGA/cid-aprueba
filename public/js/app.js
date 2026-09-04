@@ -19,7 +19,7 @@ const App = (() => {
     1: 'Coordinador de Territorio',
     2: 'Director/a Programática',
     3: 'Representante Legal',
-    4: 'Coordinador de Proyectos',
+    4: 'Encargad@ de Compras',
     5: 'Analista',
     6: 'Revisor',
   };
@@ -472,6 +472,154 @@ const App = (() => {
     }
   }
 
+  // --- Quotation Panel Constants ---
+
+  const DOC_TYPES = [
+    { key: 'rut', label: 'RUT' },
+    { key: 'camara_comercio', label: 'Cámara de Comercio' },
+    { key: 'cedula', label: 'Cédula' },
+    { key: 'certificado_bancario', label: 'Certificado Bancario' },
+  ];
+
+  // --- Quotation Panel Renderer ---
+
+  function renderQuotationsPanel(requisition, quotations, currentUser) {
+    const isAtLevel4 = requisition.current_approval_level === 4 &&
+      (requisition.status === 'pending' || requisition.status === 'in_review');
+    const isPastLevel4 = requisition.current_approval_level > 4 ||
+      requisition.status === 'approved' || requisition.status === 'rejected';
+    const canEdit = currentUser && currentUser.role_level === 4 && isAtLevel4;
+
+    // If not at level 4 and no quotations, don't show the panel
+    if (!isAtLevel4 && (!quotations || quotations.length === 0)) {
+      return '';
+    }
+
+    let html = `
+      <div class="quotations-panel" id="quotations-panel">
+        <div class="quotations-panel__header">
+          <h3 class="quotations-panel__title">Cotizaciones de Proveedores</h3>
+    `;
+
+    // Add quotation button (only for role 4 when at level 4, max 3)
+    if (canEdit && quotations.length < 3) {
+      html += `
+          <button class="btn btn--primary btn--sm quotations-panel__add-btn" id="btn-add-quotation" data-action="toggle-quotation-form" data-req-id="${requisition.id}">+ Agregar Cotización</button>
+      `;
+    }
+
+    html += `</div>`;
+
+    // Add quotation form (hidden by default)
+    if (canEdit && quotations.length < 3) {
+      html += `
+        <div class="quotation-form hidden" id="quotation-form">
+          <div class="quotation-form__field">
+            <label class="form__label" for="quotation-provider">Nombre del proveedor</label>
+            <input class="form__input" type="text" id="quotation-provider" required placeholder="Ej: Proveedor ABC" maxlength="255">
+          </div>
+          <div class="quotation-form__field">
+            <label class="form__label" for="quotation-file">Archivo de cotización</label>
+            <input class="form__input form__input--file" type="file" id="quotation-file" required accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png">
+          </div>
+          <div id="quotation-form-feedback"></div>
+          <div class="quotation-form__actions">
+            <button class="btn btn--primary btn--sm" id="btn-submit-quotation" data-action="submit-quotation" data-req-id="${requisition.id}">Subir Cotización</button>
+            <button class="btn btn--outline btn--sm" data-action="cancel-quotation-form">Cancelar</button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Render each quotation card
+    if (quotations.length === 0) {
+      html += `<div class="empty" style="padding: 24px;">No hay cotizaciones adjuntas aún.</div>`;
+    } else {
+      for (const quotation of quotations) {
+        html += renderQuotationCard(requisition, quotation, canEdit, isPastLevel4);
+      }
+    }
+
+    // Warning message: show if no quotation is complete (has all 4 docs)
+    if (isAtLevel4) {
+      const hasComplete = quotations.some((q) => {
+        const docs = q.documents || [];
+        return DOC_TYPES.every((dt) => docs.some((d) => d.doc_type === dt.key));
+      });
+
+      if (!hasComplete) {
+        html += `
+          <div class="quotation-warning">
+            <span>⚠️</span>
+            <span>Debe completar al menos una cotización con todos los documentos para poder aprobar.</span>
+          </div>
+        `;
+      }
+    }
+
+    html += `</div>`; // close quotations-panel
+    return html;
+  }
+
+  function renderQuotationCard(requisition, quotation, canEdit, isPastLevel4) {
+    const docs = quotation.documents || [];
+
+    let html = `
+      <div class="quotation-card">
+        <div class="quotation-card__header">
+          <span class="quotation-card__provider">Cotización: ${escapeHtml(quotation.provider_name)}</span>
+        </div>
+        <div class="quotation-card__file">
+          <span>📄 ${escapeHtml(quotation.original_filename)}</span>
+          <div class="quotation-card__actions">
+            <button class="btn btn--outline btn--sm" data-action="download-quotation" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-filename="${escapeHtml(quotation.original_filename)}">Descargar</button>
+            ${canEdit ? `<button class="btn btn--danger btn--sm" data-action="delete-quotation" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}">Eliminar</button>` : ''}
+          </div>
+        </div>
+        <div class="quotation-card__documents">
+          <div class="quotation-card__documents-title">Documentos del proveedor:</div>
+    `;
+
+    for (const docType of DOC_TYPES) {
+      const doc = docs.find((d) => d.doc_type === docType.key);
+      if (doc) {
+        html += `
+          <div class="quotation-card__doc-item">
+            <span class="quotation-card__doc-status quotation-card__doc-status--complete">✅ ${docType.label}: ${escapeHtml(doc.original_filename)}</span>
+            <div class="quotation-card__actions">
+              <button class="btn btn--outline btn--sm" data-action="download-quotation-doc" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-doc-id="${doc.id}" data-filename="${escapeHtml(doc.original_filename)}">Descargar</button>
+              ${canEdit ? `<button class="btn btn--danger btn--sm" data-action="delete-quotation-doc" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-doc-id="${doc.id}">Eliminar</button>` : ''}
+            </div>
+          </div>
+        `;
+      } else {
+        html += `
+          <div class="quotation-card__doc-item">
+            <span class="quotation-card__doc-status quotation-card__doc-status--missing">❌ ${docType.label}: (sin adjuntar)</span>
+            <div class="quotation-card__actions">
+        `;
+        if (canEdit) {
+          html += `
+              <label class="btn btn--outline btn--sm quotation-card__attach-btn">
+                Adjuntar
+                <input type="file" class="hidden" data-action="attach-quotation-doc" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-doc-type="${docType.key}" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+              </label>
+          `;
+        }
+        html += `
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    html += `
+        </div>
+      </div>
+    `;
+    return html;
+  }
+
   // --- Requisition Detail View ---
 
   async function renderRequisitionDetail(container, id) {
@@ -487,6 +635,7 @@ const App = (() => {
       const requisition = result.data.requisition;
       const steps = requisition.approval_steps || [];
       const logs = requisition.approval_logs || [];
+      const quotations = result.data.quotations || [];
 
       const canAct = currentUser &&
         currentUser.role_level === requisition.current_approval_level &&
@@ -531,6 +680,9 @@ const App = (() => {
               </div>
             </div>
       `;
+
+      // Quotations panel — between requisition info and approval actions
+      html += renderQuotationsPanel(requisition, quotations, currentUser);
 
       // Approval action panel
       if (canAct) {
@@ -996,6 +1148,138 @@ const App = (() => {
     }
   }
 
+  // --- Quotation Handlers ---
+
+  function handleToggleQuotationForm() {
+    const form = $('#quotation-form');
+    if (form) {
+      form.classList.toggle('hidden');
+    }
+  }
+
+  function handleCancelQuotationForm() {
+    const form = $('#quotation-form');
+    if (form) {
+      form.classList.add('hidden');
+      const provider = $('#quotation-provider');
+      const file = $('#quotation-file');
+      const feedback = $('#quotation-form-feedback');
+      if (provider) provider.value = '';
+      if (file) file.value = '';
+      if (feedback) feedback.innerHTML = '';
+    }
+  }
+
+  async function handleSubmitQuotation(requisitionId) {
+    const providerInput = $('#quotation-provider');
+    const fileInput = $('#quotation-file');
+    const feedback = $('#quotation-form-feedback');
+    const btn = $('#btn-submit-quotation');
+
+    const providerName = providerInput ? providerInput.value.trim() : '';
+    if (!providerName) {
+      if (feedback) feedback.innerHTML = '<div class="alert alert--error">El nombre del proveedor es obligatorio</div>';
+      return;
+    }
+
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+      if (feedback) feedback.innerHTML = '<div class="alert alert--error">Debe seleccionar un archivo de cotización</div>';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('provider_name', providerName);
+    formData.append('file', fileInput.files[0]);
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Subiendo...';
+    }
+    if (feedback) feedback.innerHTML = '';
+
+    try {
+      await API.createQuotation(requisitionId, formData);
+      navigate('requisition-detail', { id: requisitionId });
+    } catch (err) {
+      if (feedback) feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al crear la cotización')}</div>`;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Subir Cotización';
+      }
+    }
+  }
+
+  async function handleDeleteQuotation(requisitionId, quotationId) {
+    if (!confirm('¿Está seguro de eliminar esta cotización y todos sus documentos?')) return;
+
+    try {
+      await API.deleteQuotation(requisitionId, quotationId);
+      navigate('requisition-detail', { id: requisitionId });
+    } catch (err) {
+      alert(err.message || 'Error al eliminar la cotización');
+    }
+  }
+
+  async function handleAttachQuotationDoc(requisitionId, quotationId, docType, fileInput) {
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) return;
+
+    const formData = new FormData();
+    formData.append('doc_type', docType);
+    formData.append('file', fileInput.files[0]);
+
+    try {
+      await API.uploadQuotationDocument(requisitionId, quotationId, formData);
+      navigate('requisition-detail', { id: requisitionId });
+    } catch (err) {
+      alert(err.message || 'Error al adjuntar el documento');
+    }
+  }
+
+  async function handleDeleteQuotationDoc(requisitionId, quotationId, docId) {
+    if (!confirm('¿Está seguro de eliminar este documento?')) return;
+
+    try {
+      await API.deleteQuotationDocument(requisitionId, quotationId, docId);
+      navigate('requisition-detail', { id: requisitionId });
+    } catch (err) {
+      alert(err.message || 'Error al eliminar el documento');
+    }
+  }
+
+  async function handleDownloadQuotation(requisitionId, quotationId, filename) {
+    try {
+      const response = await API.downloadQuotationFile(requisitionId, quotationId);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'cotizacion';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (_err) {
+      alert('Error al descargar el archivo de cotización');
+    }
+  }
+
+  async function handleDownloadQuotationDoc(requisitionId, quotationId, docId, filename) {
+    try {
+      const response = await API.downloadQuotationDocument(requisitionId, quotationId, docId);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'documento';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (_err) {
+      alert('Error al descargar el documento');
+    }
+  }
+
   // --- Mobile Sidebar ---
 
   function toggleMobileSidebar() {
@@ -1079,6 +1363,67 @@ const App = (() => {
         const id = target.dataset.id;
         const filename = target.dataset.filename;
         handleDownload(id, filename);
+      }
+
+      // --- Quotation actions ---
+
+      if (action === 'toggle-quotation-form') {
+        e.preventDefault();
+        handleToggleQuotationForm();
+      }
+
+      if (action === 'cancel-quotation-form') {
+        e.preventDefault();
+        handleCancelQuotationForm();
+      }
+
+      if (action === 'submit-quotation') {
+        e.preventDefault();
+        const reqId = target.dataset.reqId;
+        handleSubmitQuotation(reqId);
+      }
+
+      if (action === 'delete-quotation') {
+        e.preventDefault();
+        const reqId = target.dataset.reqId;
+        const quotationId = target.dataset.quotationId;
+        handleDeleteQuotation(reqId, quotationId);
+      }
+
+      if (action === 'delete-quotation-doc') {
+        e.preventDefault();
+        const reqId = target.dataset.reqId;
+        const quotationId = target.dataset.quotationId;
+        const docId = target.dataset.docId;
+        handleDeleteQuotationDoc(reqId, quotationId, docId);
+      }
+
+      if (action === 'download-quotation') {
+        e.preventDefault();
+        const reqId = target.dataset.reqId;
+        const quotationId = target.dataset.quotationId;
+        const filename = target.dataset.filename;
+        handleDownloadQuotation(reqId, quotationId, filename);
+      }
+
+      if (action === 'download-quotation-doc') {
+        e.preventDefault();
+        const reqId = target.dataset.reqId;
+        const quotationId = target.dataset.quotationId;
+        const docId = target.dataset.docId;
+        const filename = target.dataset.filename;
+        handleDownloadQuotationDoc(reqId, quotationId, docId, filename);
+      }
+    });
+
+    // File input change handler for quotation document attachments
+    document.addEventListener('change', (e) => {
+      const target = e.target;
+      if (target.dataset && target.dataset.action === 'attach-quotation-doc') {
+        const reqId = target.dataset.reqId;
+        const quotationId = target.dataset.quotationId;
+        const docType = target.dataset.docType;
+        handleAttachQuotationDoc(reqId, quotationId, docType, target);
       }
     });
   }

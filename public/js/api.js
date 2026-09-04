@@ -114,6 +114,36 @@ const API = (() => {
     return request('POST', `/approvals/${requisitionId}/reject`, { comments });
   }
 
+  // --- Quotations ---
+
+  async function getQuotations(requisitionId) {
+    return request('GET', `/requisitions/${requisitionId}/quotations`);
+  }
+
+  async function createQuotation(requisitionId, formData) {
+    return request('POST', `/requisitions/${requisitionId}/quotations`, formData, true);
+  }
+
+  async function deleteQuotation(requisitionId, quotationId) {
+    return request('DELETE', `/requisitions/${requisitionId}/quotations/${quotationId}`);
+  }
+
+  async function uploadQuotationDocument(requisitionId, quotationId, formData) {
+    return request('POST', `/requisitions/${requisitionId}/quotations/${quotationId}/documents`, formData, true);
+  }
+
+  async function deleteQuotationDocument(requisitionId, quotationId, documentId) {
+    return request('DELETE', `/requisitions/${requisitionId}/quotations/${quotationId}/documents/${documentId}`);
+  }
+
+  async function downloadQuotationFile(requisitionId, quotationId) {
+    return request('GET', `/requisitions/${requisitionId}/quotations/${quotationId}/download`);
+  }
+
+  async function downloadQuotationDocument(requisitionId, quotationId, documentId) {
+    return request('GET', `/requisitions/${requisitionId}/quotations/${quotationId}/documents/${documentId}/download`);
+  }
+
   // --- Dashboard ---
 
   async function getDashboardStats() {
@@ -149,6 +179,13 @@ const API = (() => {
     downloadRequisition,
     approveRequisition,
     rejectRequisition,
+    getQuotations,
+    createQuotation,
+    deleteQuotation,
+    uploadQuotationDocument,
+    deleteQuotationDocument,
+    downloadQuotationFile,
+    downloadQuotationDocument,
     getDashboardStats,
     getPending,
     getRecent,

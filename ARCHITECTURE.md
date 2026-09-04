@@ -191,7 +191,7 @@ erDiagram
 | `username` | TEXT | UNIQUE, NOT NULL | Login username |
 | `email` | TEXT | UNIQUE, NOT NULL | User email |
 | `password_hash` | TEXT | NOT NULL | bcrypt-hashed password |
-| `role_level` | INTEGER | NOT NULL, CHECK 1-6 | 1 = Coordinador de Territorio, 2 = Director/a Programática, 3 = Representante Legal, 4 = Coordinador de Proyectos, 5 = Analista, 6 = Revisor |
+| `role_level` | INTEGER | NOT NULL, CHECK 1-6 | 1 = Coordinador de Territorio, 2 = Director/a Programática, 3 = Representante Legal, 4 = Encargad@ de Compras, 5 = Analista, 6 = Revisor |
 | `full_name` | TEXT | NOT NULL | Display name |
 | `is_active` | INTEGER | DEFAULT 1 | Soft-delete flag |
 | `created_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |

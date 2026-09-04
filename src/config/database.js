@@ -184,6 +184,33 @@ const initializeDatabase = async () => {
     )
   `);
 
+  rawDb.run(`
+    CREATE TABLE IF NOT EXISTS quotations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      requisition_id INTEGER NOT NULL,
+      provider_name TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      original_filename TEXT NOT NULL,
+      created_by INTEGER NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (requisition_id) REFERENCES requisitions(id),
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    )
+  `);
+
+  rawDb.run(`
+    CREATE TABLE IF NOT EXISTS quotation_documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      quotation_id INTEGER NOT NULL,
+      doc_type TEXT NOT NULL CHECK(doc_type IN ('rut', 'camara_comercio', 'cedula', 'certificado_bancario')),
+      file_path TEXT NOT NULL,
+      original_filename TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (quotation_id) REFERENCES quotations(id),
+      UNIQUE(quotation_id, doc_type)
+    )
+  `);
+
   logger.info('Database tables created successfully');
 
   // Seed default users if none exist
@@ -210,7 +237,7 @@ const seedDefaultUsers = () => {
     { username: 'coord.territorio2', email: 'coord.territorio2@cid.org.co', full_name: 'Coordinador de Territorio', role_level: 1, territory: 'Santander' },
     { username: 'dir.programatica', email: 'dir.programatica@cid.org.co', full_name: 'Director/a Programática', role_level: 2, territory: null },
     { username: 'rep.legal', email: 'rep.legal@cid.org.co', full_name: 'Representante Legal', role_level: 3, territory: null },
-    { username: 'coord.proyectos', email: 'proyectos@cid.org.co', full_name: 'Coordinador de Proyectos', role_level: 4, territory: null },
+    { username: 'enc.compras', email: 'enc.compras@cid.org.co', full_name: 'Encargad@ de Compras', role_level: 4, territory: null },
     { username: 'analista', email: 'analista@cid.org.co', full_name: 'Analista', role_level: 5, territory: null },
     { username: 'revisor', email: 'revisor@cid.org.co', full_name: 'Revisor', role_level: 6, territory: null },
   ];
