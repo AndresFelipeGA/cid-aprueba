@@ -612,7 +612,7 @@ const App = (() => {
         <div class="quotation-card__file">
           <span class="quotation-card__filename" data-action="preview-quotation-file" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-filename="${escapeHtml(quotation.original_filename)}" title="Clic para vista previa">📄 ${escapeHtml(quotation.original_filename)}</span>
           <div class="quotation-card__actions">
-            <button class="btn btn--outline btn--sm" data-action="download-quotation" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-filename="${escapeHtml(quotation.original_filename)}">Descargar</button>
+            <button class="btn btn--outline btn--sm" data-action="download-quotation" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-filename="${escapeHtml(quotation.original_filename)}">Ver</button>
             ${canEdit ? `<button class="btn btn--danger btn--sm" data-action="delete-quotation" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}">Eliminar</button>` : ''}
           </div>
         </div>
@@ -627,7 +627,7 @@ const App = (() => {
           <div class="quotation-card__doc-item">
             <span class="quotation-card__doc-status quotation-card__doc-status--complete quotation-card__doc-filename" data-action="preview-quotation-doc" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-doc-id="${doc.id}" data-filename="${escapeHtml(doc.original_filename)}" title="Clic para vista previa">✅ ${docType.label}: ${escapeHtml(doc.original_filename)}</span>
             <div class="quotation-card__actions">
-              <button class="btn btn--outline btn--sm" data-action="download-quotation-doc" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-doc-id="${doc.id}" data-filename="${escapeHtml(doc.original_filename)}">Descargar</button>
+              <button class="btn btn--outline btn--sm" data-action="download-quotation-doc" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-doc-id="${doc.id}" data-filename="${escapeHtml(doc.original_filename)}">Ver</button>
               ${canEdit ? `<button class="btn btn--danger btn--sm" data-action="delete-quotation-doc" data-req-id="${requisition.id}" data-quotation-id="${quotation.id}" data-doc-id="${doc.id}">Eliminar</button>` : ''}
             </div>
           </div>
@@ -660,62 +660,113 @@ const App = (() => {
     return html;
   }
 
-  // --- File Preview ---
+  // --- Document Preview Modal ---
 
-  async function showFilePreviewPanel(fetchFn, filename) {
-    const panel = document.querySelector('#file-preview');
-    const content = document.querySelector('#file-preview-content');
-    const titleEl = document.querySelector('#file-preview-title');
-    if (!panel || !content) return;
+  let _currentModalBlobUrl = null;
+
+  async function openDocumentModal(fetchFn, filename) {
+    const modal = document.querySelector('#document-modal');
+    const body = document.querySelector('#document-modal-body');
+    const titleEl = document.querySelector('#document-modal-title');
+    const downloadBtn = document.querySelector('#document-modal-download');
+    if (!modal || !body) return;
 
     const ext = getFileExtension(filename);
     const imageExts = ['jpg', 'jpeg', 'png'];
     const pdfExts = ['pdf'];
 
-    // Update title with filename
+    // Set title
     if (titleEl) {
       titleEl.textContent = filename || 'Vista previa';
       titleEl.title = filename || '';
     }
 
-    panel.classList.remove('hidden');
-    content.innerHTML = `
-      <div class="file-preview__loading">
+    // Reset download button
+    if (downloadBtn) {
+      downloadBtn.style.display = 'none';
+      downloadBtn.href = '#';
+      downloadBtn.removeAttribute('download');
+    }
+
+    // Show modal with loading state
+    modal.style.display = 'flex';
+    body.innerHTML = `
+      <div class="document-modal__loading">
         <div class="loading__spinner"></div>
         <span>Cargando vista previa...</span>
       </div>`;
 
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Revoke previous blob URL if any
+    if (_currentModalBlobUrl) {
+      URL.revokeObjectURL(_currentModalBlobUrl);
+      _currentModalBlobUrl = null;
+    }
 
     if (pdfExts.includes(ext)) {
       try {
         const response = await fetchFn();
         const blob = await response.blob();
         const blobUrl = URL.createObjectURL(blob);
-        content.innerHTML = `<iframe src="${blobUrl}#toolbar=1&navpanes=0&scrollbar=1&view=FitH" class="file-preview__iframe" title="Vista previa PDF"></iframe><div class="file-preview__fname">${escapeHtml(filename)}</div>`;
+        _currentModalBlobUrl = blobUrl;
+        body.innerHTML = `<iframe src="${blobUrl}#toolbar=1&navpanes=0&scrollbar=1&view=FitH" title="Vista previa PDF"></iframe>`;
+        if (downloadBtn) {
+          downloadBtn.href = blobUrl;
+          downloadBtn.download = filename || 'archivo.pdf';
+          downloadBtn.style.display = '';
+        }
       } catch (_err) {
-        content.innerHTML = '<div class="file-preview__message"><p>Error al cargar la vista previa del archivo.</p></div>';
+        body.innerHTML = '<div class="document-modal__error"><p>Error al cargar la vista previa del archivo.</p></div>';
       }
     } else if (imageExts.includes(ext)) {
       try {
         const response = await fetchFn();
         const blob = await response.blob();
         const blobUrl = URL.createObjectURL(blob);
-        content.innerHTML = `<img src="${blobUrl}" alt="${escapeHtml(filename)}" class="file-preview__image"><div class="file-preview__fname">${escapeHtml(filename)}</div>`;
+        _currentModalBlobUrl = blobUrl;
+        body.innerHTML = `<img src="${blobUrl}" alt="${escapeHtml(filename)}">`;
+        if (downloadBtn) {
+          downloadBtn.href = blobUrl;
+          downloadBtn.download = filename || 'imagen';
+          downloadBtn.style.display = '';
+        }
       } catch (_err) {
-        content.innerHTML = '<div class="file-preview__message"><p>Error al cargar la vista previa de la imagen.</p></div>';
+        body.innerHTML = '<div class="document-modal__error"><p>Error al cargar la vista previa de la imagen.</p></div>';
       }
     } else {
-      content.innerHTML = `<div class="file-preview__message"><p>Vista previa no disponible para este tipo de archivo.</p><div class="file-preview__fname">${escapeHtml(filename)}</div></div>`;
+      // Non-previewable file: try to download directly
+      try {
+        const response = await fetchFn();
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        _currentModalBlobUrl = blobUrl;
+        body.innerHTML = `<div class="document-modal__error"><p>Vista previa no disponible para este tipo de archivo.</p><p style="margin-top:8px;font-weight:500;">${escapeHtml(filename)}</p></div>`;
+        if (downloadBtn) {
+          downloadBtn.href = blobUrl;
+          downloadBtn.download = filename || 'archivo';
+          downloadBtn.style.display = '';
+        }
+      } catch (_err) {
+        body.innerHTML = '<div class="document-modal__error"><p>Error al cargar el archivo.</p></div>';
+      }
     }
   }
 
-  function closeFilePreview() {
-    const panel = document.querySelector('#file-preview');
-    if (panel) {
-      panel.classList.add('hidden');
-      const content = document.querySelector('#file-preview-content');
-      if (content) content.innerHTML = '';
+  function closeDocumentModal() {
+    const modal = document.querySelector('#document-modal');
+    if (modal) {
+      modal.style.display = 'none';
+      const body = document.querySelector('#document-modal-body');
+      if (body) body.innerHTML = '';
+      const downloadBtn = document.querySelector('#document-modal-download');
+      if (downloadBtn) {
+        downloadBtn.style.display = 'none';
+        downloadBtn.href = '#';
+        downloadBtn.removeAttribute('download');
+      }
+    }
+    if (_currentModalBlobUrl) {
+      URL.revokeObjectURL(_currentModalBlobUrl);
+      _currentModalBlobUrl = null;
     }
   }
 
@@ -777,7 +828,7 @@ const App = (() => {
               </ul>
               ${requisition.description ? `<div class="req-detail__description">${escapeHtml(requisition.description)}</div>` : ''}
               <div class="req-detail__actions">
-                <button class="btn btn--outline btn--sm" data-action="download" data-id="${requisition.id}" data-filename="${escapeHtml(requisition.original_filename)}">Descargar archivo</button>
+                <button class="btn btn--outline btn--sm" data-action="download" data-id="${requisition.id}" data-filename="${escapeHtml(requisition.original_filename)}">Ver documento</button>
               </div>
             </div>
       `;
@@ -793,7 +844,8 @@ const App = (() => {
         `;
 
         // Quotation selection UI for step 5 (Representante Legal selects a quotation)
-        if (isStep5 && quotations.length > 0) {
+        if (isStep5 && quotations.length > 1) {
+          // Multiple quotations: show selection UI
           html += `
               <div class="quotation-selection" id="quotation-selection">
                 <label class="form__label">Seleccione la cotización ganadora</label>
@@ -815,6 +867,13 @@ const App = (() => {
           }
           html += `
                 </div>
+              </div>
+          `;
+        } else if (isStep5 && quotations.length === 1) {
+          // Single quotation: auto-select, no selection UI needed
+          html += `
+              <div class="alert alert--info" style="margin-bottom: 12px;">
+                Se aprobará automáticamente la única cotización: <strong>${escapeHtml(quotations[0].provider_name)}</strong>
               </div>
           `;
         } else if (isStep5 && quotations.length === 0) {
@@ -911,18 +970,6 @@ const App = (() => {
         html += `</div></div>`;
       }
 
-      // File preview panel
-      html += `
-        <div class="file-preview hidden" id="file-preview">
-          <div class="file-preview__header">
-            <span class="file-preview__title" id="file-preview-title" title="">Vista previa</span>
-            <button class="file-preview__close" data-action="close-preview" title="Cerrar vista previa">&times;</button>
-          </div>
-          <div class="file-preview__content" id="file-preview-content">
-          </div>
-        </div>
-      `;
-
       html += `</div>`; // close right column
       html += `</div>`; // close req-detail grid
 
@@ -933,7 +980,7 @@ const App = (() => {
         const info = _lastUploadedFileInfo;
         _lastUploadedFileInfo = null;
         setTimeout(() => {
-          showFilePreviewPanel(info.fetchFn, info.filename);
+          openDocumentModal(info.fetchFn, info.filename);
         }, 400);
       }
     } catch (err) {
@@ -1540,6 +1587,26 @@ const App = (() => {
       emailBackdrop.addEventListener('click', hideEmailModal);
     }
 
+    // Document preview modal
+    const docModalClose = $('#document-modal-close');
+    if (docModalClose) {
+      docModalClose.addEventListener('click', closeDocumentModal);
+    }
+
+    const docModalBackdrop = document.querySelector('#document-modal .document-modal__backdrop');
+    if (docModalBackdrop) {
+      docModalBackdrop.addEventListener('click', closeDocumentModal);
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const modal = document.querySelector('#document-modal');
+        if (modal && modal.style.display !== 'none') {
+          closeDocumentModal();
+        }
+      }
+    });
+
     // Sidebar navigation
     document.addEventListener('click', (e) => {
       const target = e.target.closest('[data-action]');
@@ -1575,7 +1642,7 @@ const App = (() => {
         e.preventDefault();
         const id = target.dataset.id;
         const filename = target.dataset.filename;
-        handleDownload(id, filename);
+        openDocumentModal(() => API.downloadRequisition(id), filename);
       }
 
       // --- Quotation actions ---
@@ -1616,7 +1683,7 @@ const App = (() => {
         const reqId = target.dataset.reqId;
         const quotationId = target.dataset.quotationId;
         const filename = target.dataset.filename;
-        handleDownloadQuotation(reqId, quotationId, filename);
+        openDocumentModal(() => API.downloadQuotationFile(reqId, quotationId), filename);
       }
 
       if (action === 'download-quotation-doc') {
@@ -1625,21 +1692,16 @@ const App = (() => {
         const quotationId = target.dataset.quotationId;
         const docId = target.dataset.docId;
         const filename = target.dataset.filename;
-        handleDownloadQuotationDoc(reqId, quotationId, docId, filename);
+        openDocumentModal(() => API.downloadQuotationDocument(reqId, quotationId, docId), filename);
       }
 
-      // --- File Preview actions ---
-
-      if (action === 'close-preview') {
-        e.preventDefault();
-        closeFilePreview();
-      }
+      // --- Document Modal Preview actions ---
 
       if (action === 'preview-requisition-file') {
         e.preventDefault();
         const id = target.dataset.id;
         const filename = target.dataset.filename;
-        showFilePreviewPanel(() => API.downloadRequisition(id), filename);
+        openDocumentModal(() => API.downloadRequisition(id), filename);
       }
 
       if (action === 'preview-quotation-file') {
@@ -1647,7 +1709,7 @@ const App = (() => {
         const reqId = target.dataset.reqId;
         const quotationId = target.dataset.quotationId;
         const filename = target.dataset.filename;
-        showFilePreviewPanel(() => API.downloadQuotationFile(reqId, quotationId), filename);
+        openDocumentModal(() => API.downloadQuotationFile(reqId, quotationId), filename);
       }
 
       if (action === 'preview-quotation-doc') {
@@ -1656,7 +1718,7 @@ const App = (() => {
         const quotationId = target.dataset.quotationId;
         const docId = target.dataset.docId;
         const filename = target.dataset.filename;
-        showFilePreviewPanel(() => API.downloadQuotationDocument(reqId, quotationId, docId), filename);
+        openDocumentModal(() => API.downloadQuotationDocument(reqId, quotationId, docId), filename);
       }
     });
 

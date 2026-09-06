@@ -34,8 +34,8 @@ module.exports = {
       { username: 'dir.programatica', email: 'dir.programatica@cid.org.co', full_name: 'Director/a Programática', role_level: 2, territory: null },
       { username: 'rep.legal', email: 'rep.legal@cid.org.co', full_name: 'Representante Legal', role_level: 3, territory: null },
       { username: 'enc.compras', email: 'enc.compras@cid.org.co', full_name: 'Encargado/a de Compras', role_level: 4, territory: null },
-      { username: 'analista', email: 'analista@cid.org.co', full_name: 'Analista', role_level: 5, territory: null },
-      { username: 'revisor', email: 'revisor@cid.org.co', full_name: 'Revisor/a', role_level: 6, territory: null },
+      { username: 'analista', email: 'analista@cid.org.co', full_name: 'Área Financiera', role_level: 5, territory: null },
+      { username: 'revisor', email: 'revisor@cid.org.co', full_name: 'Área de Compras', role_level: 6, territory: null },
     ];
 
     for (const user of defaultUsers) {

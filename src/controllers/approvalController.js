@@ -51,8 +51,18 @@ const approvalController = {
     }
 
     // At level 5, require quotation selection before approving
+    // If only 1 quotation exists, auto-select it
     if (requisition.current_approval_level === 5) {
-      const { selected_quotation_id } = req.body;
+      let { selected_quotation_id } = req.body;
+      const quotationCount = Quotation.countByRequisition(parseInt(requisitionId, 10));
+
+      if (!selected_quotation_id && quotationCount === 1) {
+        // Auto-select the only quotation
+        const quotations = Quotation.findByRequisition(parseInt(requisitionId, 10));
+        selected_quotation_id = quotations[0].id;
+        req.body.selected_quotation_id = selected_quotation_id;
+      }
+
       if (!selected_quotation_id) {
         throw new AppError('Debe seleccionar una cotización antes de aprobar', 400, 'QUOTATION_SELECTION_REQUIRED');
       }

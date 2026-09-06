@@ -107,9 +107,26 @@
     </div>
   </div>
 
+  <!-- ========== Document Preview Modal ========== -->
+  <div id="document-modal" class="document-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="document-modal-title">
+    <div class="document-modal__backdrop"></div>
+    <div class="document-modal__container">
+      <div class="document-modal__header">
+        <h3 class="document-modal__title" id="document-modal-title"></h3>
+        <div class="document-modal__header-actions">
+          <a class="btn btn--outline btn--sm document-modal__download" id="document-modal-download" href="#" download aria-label="Descargar">⬇ Descargar</a>
+          <button class="document-modal__close" id="document-modal-close" aria-label="Cerrar">&times;</button>
+        </div>
+      </div>
+      <div class="document-modal__body" id="document-modal-body">
+        <!-- iframe or img will be inserted here dynamically -->
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
-  <script src="js/api.js?v=7"></script>
-  <script src="js/app.js?v=7"></script>
+  <script src="js/api.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
 
 </body>
 </html>
