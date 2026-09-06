@@ -1373,25 +1373,6 @@ const App = (() => {
     }
   }
 
-  // --- Download Handler ---
-
-  async function handleDownload(requisitionId, filename) {
-    try {
-      const response = await API.downloadRequisition(requisitionId);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename || 'archivo';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (_err) {
-      // Silently fail or show a brief message
-    }
-  }
-
   // --- Quotation Handlers ---
 
   function handleToggleQuotationForm() {
@@ -1503,40 +1484,6 @@ const App = (() => {
       navigate('requisition-detail', { id: requisitionId });
     } catch (err) {
       alert(err.message || 'Error al eliminar el documento');
-    }
-  }
-
-  async function handleDownloadQuotation(requisitionId, quotationId, filename) {
-    try {
-      const response = await API.downloadQuotationFile(requisitionId, quotationId);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename || 'cotizacion';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (_err) {
-      alert('Error al descargar el archivo de cotización');
-    }
-  }
-
-  async function handleDownloadQuotationDoc(requisitionId, quotationId, docId, filename) {
-    try {
-      const response = await API.downloadQuotationDocument(requisitionId, quotationId, docId);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename || 'documento';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (_err) {
-      alert('Error al descargar el documento');
     }
   }
 
