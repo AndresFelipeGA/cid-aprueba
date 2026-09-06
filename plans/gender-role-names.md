@@ -20,8 +20,10 @@ Replace the `@` symbol in role names (e.g., "Encargad@ de Compras") with proper 
 | 2 | Director Programático | Directora Programática | Director/a Programática |
 | 3 | Representante Legal | Representante Legal | Representante Legal |
 | 4 | Encargado de Compras | Encargada de Compras | Encargado/a de Compras |
-| 5 | Analista | Analista | Analista |
-| 6 | Revisor | Revisora | Revisor/a |
+| 5 | Área Financiera | Área Financiera | Área Financiera |
+| 6 | Área de Compras | Área de Compras | Área de Compras |
+
+> **Note:** Levels 5 and 6 use area/department names rather than personal titles, so they have no gender variation. The Representante Legal (level 3) participates at both step 3 and step 5 in the 7-step workflow.
 
 ## Architecture
 
@@ -88,8 +90,8 @@ The approval timeline currently calls `levelLabel(step.step_level)` which only k
     2: { M: 'Director Programático', F: 'Directora Programática', default: 'Director/a Programática' },
     3: { default: 'Representante Legal' },
     4: { M: 'Encargado de Compras', F: 'Encargada de Compras', default: 'Encargado/a de Compras' },
-    5: { default: 'Analista' },
-    6: { M: 'Revisor', F: 'Revisora', default: 'Revisor/a' },
+    5: { default: 'Área Financiera' },
+    6: { default: 'Área de Compras' },
   };
   ```
 - Update `roleName(level)` → `roleName(level, gender)` — picks the right variant

@@ -62,7 +62,7 @@ const requisitionController = {
       uploadedBy: req.user.id,
     });
 
-    // Create all 6 approval steps
+    // Create all 7 approval steps
     ApprovalStep.createAll(requisition.id);
 
     // Log the upload action

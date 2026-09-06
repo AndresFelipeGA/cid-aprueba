@@ -150,7 +150,7 @@ router.post('/requisitions',
 
 ### SQL Injection Prevention
 
-- **Always** use parameterized queries with `better-sqlite3`:
+- **Always** use parameterized queries with the database wrapper (sql.js with `better-sqlite3`-compatible API):
 
 ```javascript
 // CORRECT
@@ -306,7 +306,78 @@ module.exports = Requisition;
 
 ---
 
-## 6. Git Conventions
+## 6. Database Migrations
+
+### Convention
+
+Migration files live in [`src/config/migrations/`](src/config/migrations/) and are managed by the [`migration runner`](src/config/migrations/index.js).
+
+### File Naming
+
+```
+NNN_description.js
+```
+
+- `NNN` — Zero-padded sequential integer (`001`, `002`, `003`, …)
+- `description` — Short `snake_case` name describing the change
+
+Examples: `001_initial_schema.js`, `002_seed_users.js`, `003_add_notifications_table.js`
+
+### Module Structure
+
+Each migration file exports an object with `version`, `name`, and `up(db)`:
+
+```javascript
+module.exports = {
+  version: 3,
+  name: 'add_notifications_table',
+
+  up(db) {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        message TEXT NOT NULL,
+        read INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+  },
+};
+```
+
+### Rules
+
+- Use `CREATE TABLE IF NOT EXISTS` for schema migrations to ensure idempotency
+- Seed migrations **must** include guard clauses — check if data already exists before inserting:
+
+```javascript
+up(db) {
+  const result = db.exec('SELECT COUNT(*) FROM my_table');
+  const count = result.length > 0 ? result[0].values[0][0] : 0;
+  if (count > 0) return; // Already seeded
+  // ... insert seed data
+}
+```
+
+- **Never modify** an existing migration that has been applied — create a new migration instead
+- Test every migration on **both** a fresh database (no prior data) and an existing one (with data from previous migrations)
+- **Back up** the database before running migrations in production — the migration runner does this automatically to `data/backups/`, but verify backups exist before deploying
+- Register new migration files in the `migrations` array in [`src/config/migrations/index.js`](src/config/migrations/index.js:16)
+
+### Migration Runner Behavior
+
+1. Creates `schema_migrations` table if it doesn't exist
+2. Reads already-applied versions from `schema_migrations`
+3. Filters pending migrations (not yet in `schema_migrations`)
+4. If pending migrations exist, creates a backup of the DB file in `data/backups/`
+5. Runs each pending migration inside its own `BEGIN`/`COMMIT` transaction
+6. On failure: `ROLLBACK` and abort — no partial migrations
+
+---
+
+## 7. Git Conventions
 
 ### Branch Naming
 
@@ -346,7 +417,7 @@ uploads/
 
 ---
 
-## 7. Environment Configuration
+## 8. Environment Configuration
 
 ### Rules
 
@@ -369,7 +440,7 @@ module.exports = {
 
 ---
 
-## 8. Logging
+## 9. Logging
 
 ### Approach
 
@@ -410,7 +481,7 @@ Use a simple [`logger`](src/utils/logger.js) utility that wraps `console` method
 
 ---
 
-## 9. Testing
+## 10. Testing
 
 ### Approach
 
@@ -431,7 +502,7 @@ tests/
 
 ### Testing Priorities
 
-1. **Approval workflow logic** — The core business value. Test the full chain: upload → approve through all 6 levels → final status. Test rejection at each level.
+1. **Approval workflow logic** — The core business value. Test the full chain: upload → approve through all 7 steps → final status. Test rejection at each step. Note that role level 3 (Representante Legal) acts at both step 3 and step 5.
 2. **Authorization rules** — Verify that users cannot approve at wrong levels, cannot access restricted requisitions.
 3. **Input validation** — Confirm that malformed requests are rejected with proper error codes.
 4. **Authentication** — Token generation, expiry, invalid token handling.
@@ -466,7 +537,7 @@ describe('POST /api/approvals/:requisitionId/approve', () => {
 
 ---
 
-## 10. Frontend Standards
+## 11. Frontend Standards
 
 ### JavaScript
 

@@ -121,6 +121,56 @@ const Quotation = {
     `).get(requisitionId);
     return !!result;
   },
+
+  /**
+   * Select a quotation for a requisition. Marks the chosen quotation as
+   * 'selected', all others as 'not_selected', and updates the requisition's
+   * selected_quotation_id.
+   * @param {number} quotationId - The quotation to select
+   * @param {number} requisitionId - The requisition that owns the quotation
+   * @returns {object} The selected quotation
+   */
+  selectQuotation(quotationId, requisitionId) {
+    const quotation = Quotation.findById(quotationId);
+    if (!quotation) {
+      throw new AppError('Cotización no encontrada', 404, 'QUOTATION_NOT_FOUND');
+    }
+    if (quotation.requisition_id !== requisitionId) {
+      throw new AppError('La cotización no pertenece a esta requisición', 400, 'QUOTATION_MISMATCH');
+    }
+
+    // Mark all quotations for this requisition as not_selected
+    db.prepare(`
+      UPDATE quotations SET status = 'not_selected', updated_at = datetime('now')
+      WHERE requisition_id = ?
+    `).run(requisitionId);
+
+    // Mark the chosen quotation as selected
+    db.prepare(`
+      UPDATE quotations SET status = 'selected', updated_at = datetime('now')
+      WHERE id = ?
+    `).run(quotationId);
+
+    // Update the requisition's selected_quotation_id
+    db.prepare(`
+      UPDATE requisitions SET selected_quotation_id = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(quotationId, requisitionId);
+
+    return Quotation.findById(quotationId);
+  },
+
+  /**
+   * Check if a requisition has a selected quotation.
+   * @param {number} requisitionId - The requisition ID
+   * @returns {boolean} True if a quotation with status='selected' exists
+   */
+  hasSelectedQuotation(requisitionId) {
+    const result = db.prepare(`
+      SELECT id FROM quotations WHERE requisition_id = ? AND status = 'selected' LIMIT 1
+    `).get(requisitionId);
+    return !!result;
+  },
 };
 
 module.exports = Quotation;

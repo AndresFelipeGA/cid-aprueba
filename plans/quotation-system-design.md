@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS quotations (
   provider_name TEXT NOT NULL,
   quotation_file_path TEXT NOT NULL,
   quotation_original_filename TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'selected', 'not_selected')),
   created_by INTEGER NOT NULL,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now')),
@@ -69,6 +70,7 @@ erDiagram
         text provider_name
         text quotation_file_path
         text quotation_original_filename
+        text status
         integer created_by FK
         text created_at
         text updated_at
@@ -87,9 +89,11 @@ erDiagram
 ### 2.3 Design Rationale
 
 - **Two tables instead of one**: Separating `quotations` from `quotation_documents` keeps the schema normalized. Each quotation has exactly 4 supporting docs, but using a separate table with a `doc_type` discriminator is cleaner than 8 file columns on the quotation row.
+- **`status` field on `quotations`**: Tracks the selection state through the workflow. Values: `'active'` (default when created at step 4), `'selected'` (chosen by Representante Legal at step 5), `'not_selected'` (automatically set for non-chosen quotations when one is selected).
 - **`created_by`** on `quotations`: Tracks which user (should always be role_level 4) attached the quotation.
 - **`doc_type` CHECK constraint**: Enforces only the 4 valid document types at the database level.
 - **No `updated_at` on `quotation_documents`**: These are immutable once uploaded; to replace a document, delete and re-upload.
+- **`selected_quotation_id`** on `requisitions`: At step 5, the Representante Legal selects one quotation. This FK tracks the chosen quotation for downstream steps (Área Financiera, Área de Compras).
 
 ---
 
@@ -404,11 +408,11 @@ const quotationController = {
 
 ## 7. Modified Approval Flow
 
-### 7.1 Flow Diagram
+### 7.1 Flow Diagram — Step 4 (Quotation Upload)
 
 ```mermaid
 flowchart TD
-    A[Requisition reaches Level 4] --> B{User is role_level 4?}
+    A[Requisition reaches Step 4] --> B{User is role_level 4?}
     B -->|No| C[403 Forbidden]
     B -->|Yes| D[Show Quotation Management Panel]
     D --> E[User adds Cotización 1]
@@ -423,19 +427,49 @@ flowchart TD
     L --> M[User clicks Approve]
     M --> N{Server validates: hasCompleteQuotation?}
     N -->|No| O[400 Error: QUOTATIONS_INCOMPLETE]
-    N -->|Yes| P[Proceed with normal approval flow to Level 5]
+    N -->|Yes| P[Proceed to Step 5]
     D --> Q[User can also Reject without cotizaciones]
 ```
 
-### 7.2 Key Rules
+### 7.2 Flow Diagram — Step 5 (Quotation Selection)
+
+```mermaid
+flowchart TD
+    A[Requisition reaches Step 5] --> B{User is role_level 3?}
+    B -->|No| C[403 Forbidden]
+    B -->|Yes| D[Show Quotation Review Panel with all cotizaciones]
+    D --> E[Representante Legal reviews quotations]
+    E --> F{Selects one quotation?}
+    F -->|No| G[Approve button disabled]
+    F -->|Yes| H[Selected quotation status = 'selected']
+    H --> I[Other quotations status = 'not_selected']
+    I --> J[requisitions.selected_quotation_id = chosen ID]
+    J --> K[Approve button enabled]
+    K --> L[User clicks Approve]
+    L --> M[Proceed to Step 6 - Área Financiera]
+    D --> N[User can also Reject]
+```
+
+### 7.3 Quotation Status Lifecycle
+
+| Status | Set When | Set By |
+|--------|----------|--------|
+| `active` | Quotation is created at step 4 | System (default) |
+| `selected` | Representante Legal chooses this quotation at step 5 | Representante Legal |
+| `not_selected` | Another quotation is selected at step 5 | System (automatic) |
+
+### 7.4 Key Rules
 
 1. **Approve is blocked** at step 4 until `Quotation.hasCompleteQuotation()` returns `true`
-2. **Reject is NOT blocked** — the Encargad@ de Compras can reject without attaching quotations (they may reject for other reasons)
-3. **Max 3 quotations** per requisition — enforced at API level
-4. **Min 1 complete quotation** to approve — enforced both client-side (disable button) and server-side (throw `AppError`)
-5. **Quotations are immutable after approval** — once step 4 is approved, quotation endpoints return 400 for any mutations
-6. **All authenticated users** can view/download quotation files for requisitions they have access to
-7. **Only role_level 4** can create/delete quotations and upload supporting documents
+2. **Approve is blocked** at step 5 until a quotation has been selected (`requisitions.selected_quotation_id` is set)
+3. **Reject is NOT blocked** — the Encargado/a de Compras (step 4) or Representante Legal (step 5) can reject without completing their respective actions
+4. **Max 3 quotations** per requisition — enforced at API level
+5. **Min 1 complete quotation** to approve at step 4 — enforced both client-side (disable button) and server-side (throw `AppError`)
+6. **Quotations are immutable after step 4 approval** — once step 4 is approved, quotation creation/deletion endpoints return 400 for any mutations
+7. **Quotation selection is immutable after step 5 approval** — once step 5 is approved, the selection cannot be changed
+8. **All authenticated users** can view/download quotation files for requisitions they have access to
+9. **Only role_level 4** can create/delete quotations and upload supporting documents
+10. **Only role_level 3** (at step 5) can select a quotation
 
 ---
 
@@ -580,6 +614,7 @@ rawDb.run(`
     provider_name TEXT NOT NULL,
     quotation_file_path TEXT NOT NULL,
     quotation_original_filename TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'selected', 'not_selected')),
     created_by INTEGER NOT NULL,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now')),

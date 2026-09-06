@@ -1,5 +1,23 @@
 const db = require('../config/database');
 
+/**
+ * Maps each workflow step_level to the required user role_level.
+ * Role level 3 (Representante Legal) appears at both step 3 and step 5.
+ * @type {Object<number, number>}
+ */
+const STEP_TO_ROLE_MAP = {
+  1: 1, // Coordinador/a de Territorio
+  2: 2, // Director/a Programática
+  3: 3, // Representante Legal (primera vez)
+  4: 4, // Encargado/a de Compras
+  5: 3, // Representante Legal (segunda vez — selecciona cotización)
+  6: 5, // Área Financiera
+  7: 6, // Área de Compras
+};
+
+/** Maximum step level in the approval workflow */
+const MAX_STEP_LEVEL = 7;
+
 const ApprovalStep = {
   findByRequisition(requisitionId) {
     return db.prepare(`
@@ -16,6 +34,11 @@ const ApprovalStep = {
     `).get(requisitionId, stepLevel);
   },
 
+  /**
+   * Create all 7 approval steps for a requisition using the step→role mapping.
+   * @param {number} requisitionId - The requisition ID
+   * @returns {Array} The created approval steps
+   */
   createAll(requisitionId) {
     const insertStmt = db.prepare(`
       INSERT INTO approval_steps (requisition_id, step_level, status, assigned_role_level)
@@ -23,8 +46,8 @@ const ApprovalStep = {
     `);
 
     const createSteps = db.transaction(() => {
-      for (let level = 1; level <= 6; level++) {
-        insertStmt.run(requisitionId, level, level);
+      for (let step = 1; step <= MAX_STEP_LEVEL; step++) {
+        insertStmt.run(requisitionId, step, STEP_TO_ROLE_MAP[step]);
       }
     });
 
@@ -44,3 +67,5 @@ const ApprovalStep = {
 };
 
 module.exports = ApprovalStep;
+module.exports.STEP_TO_ROLE_MAP = STEP_TO_ROLE_MAP;
+module.exports.MAX_STEP_LEVEL = MAX_STEP_LEVEL;

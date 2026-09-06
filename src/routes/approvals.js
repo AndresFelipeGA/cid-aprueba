@@ -13,6 +13,7 @@ router.post(
   authenticate,
   [
     body('comments').optional().trim().isLength({ max: 1000 }).withMessage('Los comentarios deben tener máximo 1000 caracteres'),
+    body('selected_quotation_id').optional().isInt({ min: 1 }).withMessage('El ID de cotización seleccionada debe ser un número válido'),
   ],
   validate,
   asyncHandler(approvalController.approve),

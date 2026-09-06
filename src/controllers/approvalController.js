@@ -6,7 +6,7 @@ const Quotation = require('../models/Quotation');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 
-const MAX_APPROVAL_LEVEL = 6;
+const { STEP_TO_ROLE_MAP, MAX_STEP_LEVEL } = require('../models/ApprovalStep');
 
 const approvalController = {
   approve(req, res) {
@@ -27,7 +27,9 @@ const approvalController = {
       throw new AppError('La requisición fue rechazada y no puede ser aprobada', 400, 'ALREADY_REJECTED');
     }
 
-    if (user.role_level !== requisition.current_approval_level) {
+    // Authorization: check that user's role matches the required role for this step
+    const requiredRoleLevel = STEP_TO_ROLE_MAP[requisition.current_approval_level];
+    if (!requiredRoleLevel || user.role_level !== requiredRoleLevel) {
       throw new AppError(
         'No autorizado para aprobar en este nivel',
         403,
@@ -48,8 +50,28 @@ const approvalController = {
       }
     }
 
+    // At level 5, require quotation selection before approving
+    if (requisition.current_approval_level === 5) {
+      const { selected_quotation_id } = req.body;
+      if (!selected_quotation_id) {
+        throw new AppError('Debe seleccionar una cotización antes de aprobar', 400, 'QUOTATION_SELECTION_REQUIRED');
+      }
+      const selectedQ = Quotation.findById(selected_quotation_id);
+      if (!selectedQ || selectedQ.requisition_id !== parseInt(requisitionId, 10)) {
+        throw new AppError('Cotización seleccionada no válida', 400, 'INVALID_QUOTATION_SELECTION');
+      }
+    }
+
     // Use a transaction for atomicity
     const performApproval = db.transaction(() => {
+      // At step 5, select the quotation before updating the step
+      if (requisition.current_approval_level === 5) {
+        Quotation.selectQuotation(
+          parseInt(req.body.selected_quotation_id, 10),
+          parseInt(requisitionId, 10),
+        );
+      }
+
       // Update the approval step
       ApprovalStep.updateStatus(step.id, 'approved');
 
@@ -65,7 +87,7 @@ const approvalController = {
       // Determine next state
       const nextLevel = requisition.current_approval_level + 1;
 
-      if (nextLevel > MAX_APPROVAL_LEVEL) {
+      if (nextLevel > MAX_STEP_LEVEL) {
         // All levels approved — requisition is fully approved
         Requisition.updateStatus(requisitionId, {
           status: 'approved',
@@ -117,7 +139,9 @@ const approvalController = {
       throw new AppError('La requisición ya fue rechazada', 400, 'ALREADY_REJECTED');
     }
 
-    if (user.role_level !== requisition.current_approval_level) {
+    // Authorization: check that user's role matches the required role for this step
+    const requiredRoleLevel = STEP_TO_ROLE_MAP[requisition.current_approval_level];
+    if (!requiredRoleLevel || user.role_level !== requiredRoleLevel) {
       throw new AppError(
         'No autorizado para rechazar en este nivel',
         403,

@@ -106,8 +106,12 @@ const API = (() => {
 
   // --- Approvals ---
 
-  async function approveRequisition(requisitionId, comments) {
-    return request('POST', `/approvals/${requisitionId}/approve`, { comments: comments || '' });
+  async function approveRequisition(requisitionId, comments, selectedQuotationId) {
+    const body = { comments: comments || '' };
+    if (selectedQuotationId) {
+      body.selected_quotation_id = selectedQuotationId;
+    }
+    return request('POST', `/approvals/${requisitionId}/approve`, body);
   }
 
   async function rejectRequisition(requisitionId, comments) {

@@ -21,8 +21,30 @@ const App = (() => {
     2: { M: 'Director Programático', F: 'Directora Programática', default: 'Director/a Programática' },
     3: { default: 'Representante Legal' },
     4: { M: 'Encargado de Compras', F: 'Encargada de Compras', default: 'Encargado/a de Compras' },
-    5: { default: 'Analista' },
-    6: { M: 'Revisor', F: 'Revisora', default: 'Revisor/a' },
+    5: { default: 'Área Financiera' },
+    6: { default: 'Área de Compras' },
+  };
+
+  // --- Step-to-Role Mapping (mirrors backend STEP_TO_ROLE_MAP) ---
+  const STEP_TO_ROLE = {
+    1: 1, // Coordinador/a de Territorio
+    2: 2, // Director/a Programática
+    3: 3, // Representante Legal
+    4: 4, // Encargado/a de Compras
+    5: 3, // Representante Legal (selección de cotización)
+    6: 5, // Área Financiera
+    7: 6, // Área de Compras
+  };
+
+  // --- Step Labels for timeline/progress display ---
+  const STEP_LABELS = {
+    1: 'Aprobación Territorial',
+    2: 'Aprobación Programática',
+    3: 'Aprobación Legal',
+    4: 'Gestión de Cotizaciones',
+    5: 'Selección de Cotización',
+    6: 'Aprobación Financiera',
+    7: 'Aprobación Final',
   };
 
   // --- Helpers ---
@@ -83,6 +105,15 @@ const App = (() => {
 
   function levelLabel(level, gender) {
     return roleName(level, gender);
+  }
+
+  function stepLabel(stepLevel) {
+    return STEP_LABELS[stepLevel] || `Paso ${stepLevel}`;
+  }
+
+  function roleNameForStep(stepLevel, gender) {
+    const roleLevel = STEP_TO_ROLE[stepLevel];
+    return roleName(roleLevel, gender);
   }
 
   function roleDisplay(user) {
@@ -461,7 +492,7 @@ const App = (() => {
             <tr class="table__row--clickable" data-action="view-requisition" data-id="${requisition.id}">
               <td>${escapeHtml(requisition.title)}</td>
               <td>${statusBadge(requisition.status)}</td>
-              <td>${levelLabel(requisition.current_approval_level)}</td>
+              <td>${stepLabel(requisition.current_approval_level)}</td>
               <td>${escapeHtml(requisition.uploader_name)}</td>
               <td>${formatDateShort(requisition.created_at)}</td>
             </tr>
@@ -705,9 +736,11 @@ const App = (() => {
       const logs = requisition.approval_logs || [];
       const quotations = requisition.quotations || [];
 
+      const requiredRoleLevel = STEP_TO_ROLE[requisition.current_approval_level];
       const canAct = currentUser &&
-        currentUser.role_level === requisition.current_approval_level &&
+        currentUser.role_level === requiredRoleLevel &&
         (requisition.status === 'pending' || requisition.status === 'in_review');
+      const isStep5 = requisition.current_approval_level === 5;
 
       let html = `
         <a href="#" class="back-link" data-action="navigate" data-view="requisitions">&larr; Volver a requisiciones</a>
@@ -723,7 +756,7 @@ const App = (() => {
                 </li>
                 <li>
                   <span class="req-detail__meta-label">Nivel actual</span>
-                  <span class="req-detail__meta-value">${levelLabel(requisition.current_approval_level)}</span>
+                  <span class="req-detail__meta-value">${stepLabel(requisition.current_approval_level)} (${roleNameForStep(requisition.current_approval_level)})</span>
                 </li>
                 <li>
                   <span class="req-detail__meta-label">Subido por</span>
@@ -756,7 +789,41 @@ const App = (() => {
       if (canAct) {
         html += `
             <div class="approval-panel" id="approval-panel">
-              <h3 class="approval-panel__title">Acción de aprobación — ${levelLabel(requisition.current_approval_level, currentUser.gender)}</h3>
+              <h3 class="approval-panel__title">Acción de aprobación — ${stepLabel(requisition.current_approval_level)} (${roleNameForStep(requisition.current_approval_level, currentUser.gender)})</h3>
+        `;
+
+        // Quotation selection UI for step 5 (Representante Legal selects a quotation)
+        if (isStep5 && quotations.length > 0) {
+          html += `
+              <div class="quotation-selection" id="quotation-selection">
+                <label class="form__label">Seleccione la cotización ganadora</label>
+                <div class="quotation-selection__list">
+          `;
+          for (const quotation of quotations) {
+            const docs = quotation.documents || [];
+            const isComplete = DOC_TYPES.every((dt) => docs.some((d) => d.doc_type === dt.key));
+            html += `
+                  <label class="quotation-selection__option${isComplete ? '' : ' quotation-selection__option--incomplete'}">
+                    <input type="radio" name="selected_quotation" value="${quotation.id}" class="quotation-selection__radio" ${!isComplete ? 'disabled' : ''}>
+                    <div class="quotation-selection__info">
+                      <span class="quotation-selection__provider">${escapeHtml(quotation.provider_name)}</span>
+                      <span class="quotation-selection__file">📄 ${escapeHtml(quotation.original_filename)}</span>
+                      ${!isComplete ? '<span class="quotation-selection__warning">⚠️ Documentación incompleta</span>' : '<span class="quotation-selection__complete">✅ Documentación completa</span>'}
+                    </div>
+                  </label>
+            `;
+          }
+          html += `
+                </div>
+              </div>
+          `;
+        } else if (isStep5 && quotations.length === 0) {
+          html += `
+              <div class="alert alert--error">No hay cotizaciones disponibles para seleccionar. El paso anterior debe agregar cotizaciones.</div>
+          `;
+        }
+
+        html += `
               <div class="form__group">
                 <label class="form__label" for="approval-comments">Comentarios</label>
                 <textarea class="form__input" id="approval-comments" rows="3" placeholder="Comentarios opcionales para aprobación, obligatorios para rechazo..."></textarea>
@@ -796,19 +863,21 @@ const App = (() => {
 
         // Determine gender for this step's role label:
         // - If there's a log entry (completed step), use the acting user's gender
-        // - If it's the current user's level, use their gender
+        // - If the current user's role matches this step's required role, use their gender
         // - Otherwise use neutral (no gender)
+        const stepRoleLevel = STEP_TO_ROLE[step.step_level] || step.step_level;
         let stepGender = null;
         if (stepLog && stepLog.user_gender) {
           stepGender = stepLog.user_gender;
-        } else if (currentUser && step.step_level === currentUser.role_level) {
+        } else if (currentUser && stepRoleLevel === currentUser.role_level) {
           stepGender = currentUser.gender;
         }
 
         html += `
           <li class="timeline__item ${itemClass}">
             <div class="timeline__dot"></div>
-            <div class="timeline__level">${levelLabel(step.step_level, stepGender)}</div>
+            <div class="timeline__level">${stepLabel(step.step_level)}</div>
+            <div class="timeline__step-role">${roleNameForStep(step.step_level, stepGender)}</div>
             <div class="timeline__status">${statusLabel(step.status)}${stepLog ? ` — ${escapeHtml(stepLog.user_name)}` : ''}</div>
             ${stepLog && stepLog.comments ? `<div class="timeline__comment">"${escapeHtml(stepLog.comments)}"</div>` : ''}
             ${stepLog ? `<div class="timeline__status">${formatDateShort(stepLog.created_at)}</div>` : ''}
@@ -1203,12 +1272,24 @@ const App = (() => {
     const btn = $('#btn-approve');
     const feedback = $('#approval-feedback');
 
+    // Check if quotation selection is required (step 5)
+    let selectedQuotationId = null;
+    const quotationSelection = $('#quotation-selection');
+    if (quotationSelection) {
+      const selectedRadio = document.querySelector('input[name="selected_quotation"]:checked');
+      if (!selectedRadio) {
+        feedback.innerHTML = '<div class="alert alert--error">Debe seleccionar una cotización antes de aprobar.</div>';
+        return;
+      }
+      selectedQuotationId = selectedRadio.value;
+    }
+
     btn.disabled = true;
     btn.textContent = 'Aprobando...';
     if ($('#btn-reject')) $('#btn-reject').disabled = true;
 
     try {
-      const result = await API.approveRequisition(requisitionId, comments);
+      const result = await API.approveRequisition(requisitionId, comments, selectedQuotationId);
       feedback.innerHTML = `<div class="alert alert--success">${escapeHtml(result.message || 'Requisición aprobada')}</div>`;
       setTimeout(() => navigate('requisition-detail', { id: requisitionId }), 1000);
     } catch (err) {

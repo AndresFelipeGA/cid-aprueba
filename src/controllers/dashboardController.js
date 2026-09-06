@@ -30,7 +30,7 @@ const dashboardController = {
     const limit = parseInt(req.query.limit, 10) || 20;
     const offset = (page - 1) * limit;
 
-    const { items, total } = Requisition.findPendingForLevel(userRoleLevel, { limit, offset });
+    const { items, total } = Requisition.findPendingForRole(userRoleLevel, { limit, offset });
 
     res.json({
       success: true,

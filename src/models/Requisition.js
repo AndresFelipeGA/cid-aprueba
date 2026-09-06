@@ -20,8 +20,14 @@ const Requisition = {
     const params = [];
 
     if (userRoleLevel) {
+      const { STEP_TO_ROLE_MAP } = require('./ApprovalStep');
+      const minStep = Math.min(
+        ...Object.entries(STEP_TO_ROLE_MAP)
+          .filter(([_, role]) => role === userRoleLevel)
+          .map(([step]) => parseInt(step, 10)),
+      );
       query += ' WHERE r.current_approval_level >= ? OR r.status IN (\'approved\', \'rejected\')';
-      params.push(userRoleLevel);
+      params.push(minStep);
     }
 
     query += ' ORDER BY r.created_at DESC LIMIT ? OFFSET ?';
@@ -32,8 +38,14 @@ const Requisition = {
     let countQuery = 'SELECT COUNT(*) as total FROM requisitions';
     const countParams = [];
     if (userRoleLevel) {
+      const { STEP_TO_ROLE_MAP } = require('./ApprovalStep');
+      const minStep = Math.min(
+        ...Object.entries(STEP_TO_ROLE_MAP)
+          .filter(([_, role]) => role === userRoleLevel)
+          .map(([step]) => parseInt(step, 10)),
+      );
       countQuery += ' WHERE current_approval_level >= ? OR status IN (\'approved\', \'rejected\')';
-      countParams.push(userRoleLevel);
+      countParams.push(minStep);
     }
     const { total } = db.prepare(countQuery).get(...countParams);
 
@@ -51,7 +63,7 @@ const Requisition = {
     `).all(status, limit, offset);
 
     const { total } = db.prepare(
-      'SELECT COUNT(*) as total FROM requisitions WHERE status = ?'
+      'SELECT COUNT(*) as total FROM requisitions WHERE status = ?',
     ).get(status);
 
     return { items, total };
@@ -138,21 +150,45 @@ const Requisition = {
     `).all();
   },
 
-  findPendingForLevel(roleLevel, { limit = 20, offset = 0 } = {}) {
+  /**
+   * Find requisitions pending approval for a given role level.
+   * Handles the case where role_level 3 appears at both step 3 and step 5
+   * by looking up all step_levels that map to the given role_level.
+   * @param {number} roleLevel - The user's role_level
+   * @param {object} [options] - Pagination options
+   * @param {number} [options.limit=20] - Max items to return
+   * @param {number} [options.offset=0] - Offset for pagination
+   * @returns {{ items: Array, total: number }}
+   */
+  findPendingForRole(roleLevel, { limit = 20, offset = 0 } = {}) {
+    const { STEP_TO_ROLE_MAP } = require('./ApprovalStep');
+    const matchingSteps = Object.entries(STEP_TO_ROLE_MAP)
+      .filter(([_, role]) => role === roleLevel)
+      .map(([step]) => parseInt(step, 10));
+    const placeholders = matchingSteps.map(() => '?').join(',');
+
     const items = db.prepare(`
       SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username
-      FROM requisitions r
-      JOIN users u ON r.uploaded_by = u.id
-      WHERE r.current_approval_level = ? AND r.status IN ('pending', 'in_review')
-      ORDER BY r.created_at ASC
-      LIMIT ? OFFSET ?
-    `).all(roleLevel, limit, offset);
+      FROM requisitions r JOIN users u ON r.uploaded_by = u.id
+      WHERE r.current_approval_level IN (${placeholders})
+        AND r.status IN ('pending', 'in_review')
+      ORDER BY r.created_at ASC LIMIT ? OFFSET ?
+    `).all(...matchingSteps, limit, offset);
 
-    const { total } = db.prepare(
-      'SELECT COUNT(*) as total FROM requisitions WHERE current_approval_level = ? AND status IN (\'pending\', \'in_review\')'
-    ).get(roleLevel);
+    const { total } = db.prepare(`
+      SELECT COUNT(*) as total FROM requisitions
+      WHERE current_approval_level IN (${placeholders})
+        AND status IN ('pending', 'in_review')
+    `).get(...matchingSteps);
 
     return { items, total };
+  },
+
+  /**
+   * @deprecated Use findPendingForRole() instead — kept for backward compatibility
+   */
+  findPendingForLevel(roleLevel, { limit = 20, offset = 0 } = {}) {
+    return Requisition.findPendingForRole(roleLevel, { limit, offset });
   },
 
   findRecent({ limit = 10 } = {}) {

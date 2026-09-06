@@ -1,6 +1,22 @@
+/**
+ * Database Module — Persistent sql.js wrapper
+ *
+ * Provides a synchronous façade that mimics the better-sqlite3 API so all
+ * model files can use `db.prepare(sql).get(...)` without changes.
+ *
+ * Key features:
+ * - Loads existing DB from disk on startup (data persists across restarts)
+ * - Creates a fresh DB only when no file exists
+ * - Runs schema migrations automatically
+ * - Auto-saves to disk every 30 seconds
+ * - Saves on graceful shutdown (SIGINT, SIGTERM)
+ * - Atomic writes (temp file + rename) to prevent corruption
+ *
+ * @module config/database
+ */
+
 const path = require('path');
 const fs = require('fs');
-const bcrypt = require('bcryptjs');
 const config = require('./env');
 const logger = require('../utils/logger');
 
@@ -60,7 +76,7 @@ const db = {
       run(...params) {
         rawDb.run(sql, params);
         // Mimic better-sqlite3 RunResult
-        const lastId = rawDb.exec("SELECT last_insert_rowid() as id");
+        const lastId = rawDb.exec('SELECT last_insert_rowid() as id');
         const changes = rawDb.getRowsModified();
         const lastInsertRowid = lastId.length > 0 && lastId[0].values.length > 0
           ? lastId[0].values[0][0]
@@ -74,8 +90,18 @@ const db = {
     rawDb.run(sql);
   },
 
-  pragma(_str) {
-    // sql.js doesn't support pragma in the same way; silently ignore
+  /**
+   * Execute a PRAGMA statement. sql.js does not support all PRAGMAs,
+   * so unsupported ones are silently ignored.
+   * @param {string} pragmaStr - The PRAGMA string (e.g. 'journal_mode = WAL')
+   * @param {object} [_options] - Ignored, kept for API compatibility
+   */
+  pragma(pragmaStr, _options) {
+    try {
+      rawDb.run(`PRAGMA ${pragmaStr}`);
+    } catch (_err) {
+      // sql.js doesn't support all PRAGMAs; silently ignore
+    }
   },
 
   transaction(fn) {
@@ -94,170 +120,110 @@ const db = {
   },
 };
 
-/** Persist the in-memory database to the file on disk */
+// ── Persistence helpers ────────────────────────────────────────────────────
+
+let _saving = false;
+
+/**
+ * Persist the in-memory database to the file on disk using atomic writes.
+ * Writes to a temp file first, then renames to prevent corruption.
+ */
 function _saveToDisk() {
+  if (_saving) return;
+  _saving = true;
   try {
     const data = rawDb.export();
     const buffer = Buffer.from(data);
-    fs.writeFileSync(dbPath, buffer);
+    const tmpPath = dbPath + '.tmp';
+    fs.writeFileSync(tmpPath, buffer);
+    fs.renameSync(tmpPath, dbPath);
   } catch (err) {
     logger.error('Failed to persist database to disk', { stack: err.stack });
+  } finally {
+    _saving = false;
   }
+}
+
+// ── Auto-save ──────────────────────────────────────────────────────────────
+
+let _autoSaveInterval = null;
+const AUTO_SAVE_MS = 30_000; // 30 seconds
+
+/**
+ * Start the periodic auto-save interval.
+ * Uses unref() so the timer doesn't prevent Node.js from exiting.
+ */
+function _startAutoSave() {
+  _autoSaveInterval = setInterval(() => {
+    _saveToDisk();
+    logger.debug('Auto-save completed');
+  }, AUTO_SAVE_MS);
+  _autoSaveInterval.unref();
+}
+
+// ── Graceful shutdown ──────────────────────────────────────────────────────
+
+let _shutdownRegistered = false;
+
+/**
+ * Register process event handlers to save the database before exit.
+ */
+function _registerShutdownHandlers() {
+  if (_shutdownRegistered) return;
+  _shutdownRegistered = true;
+
+  const shutdown = (signal) => {
+    logger.info(`Received ${signal}, saving database...`);
+    _saveToDisk();
+    if (_autoSaveInterval) clearInterval(_autoSaveInterval);
+    process.exit(0);
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('uncaughtException', (err) => {
+    logger.error('Uncaught exception', { stack: err.stack });
+    _saveToDisk();
+    process.exit(1);
+  });
 }
 
 // ── Initialization (async, called once from server.js) ─────────────────────
 
+/**
+ * Initialize the database: load from disk or create fresh, run migrations,
+ * start auto-save, and register shutdown handlers.
+ * @returns {Promise<void>}
+ */
 const initializeDatabase = async () => {
   const initSqlJs = require('sql.js');
   SQL = await initSqlJs();
 
-  // Schema has changed significantly (documents → requisitions, users.territory).
-  // Drop the existing DB file so it is recreated with the new schema and seed data.
+  // 1. Load existing DB from disk or create a new one
   if (fs.existsSync(dbPath)) {
-    fs.unlinkSync(dbPath);
-    logger.info('Removed old database file for schema migration');
+    const fileBuffer = fs.readFileSync(dbPath);
+    rawDb = new SQL.Database(fileBuffer);
+    logger.info('Database loaded from disk');
+  } else {
+    rawDb = new SQL.Database();
+    logger.info('Created new empty database');
   }
 
-  rawDb = new SQL.Database();
-
-  logger.info('Initializing database...');
-
-  // Enable foreign keys
+  // 2. Enable foreign keys
   rawDb.run('PRAGMA foreign_keys = ON');
 
-  rawDb.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      full_name TEXT NOT NULL,
-      role_level INTEGER NOT NULL CHECK (role_level >= 1 AND role_level <= 6),
-      territory TEXT,
-      gender TEXT DEFAULT NULL CHECK(gender IN ('M', 'F')),
-      is_active INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    )
-  `);
+  // 3. Run pending migrations
+  const { runMigrations } = require('./migrations');
+  runMigrations(rawDb, dbPath);
 
-  rawDb.run(`
-    CREATE TABLE IF NOT EXISTS requisitions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      description TEXT,
-      file_path TEXT NOT NULL,
-      original_filename TEXT NOT NULL,
-      uploaded_by INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_review', 'approved', 'rejected')),
-      current_approval_level INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (uploaded_by) REFERENCES users(id)
-    )
-  `);
-
-  rawDb.run(`
-    CREATE TABLE IF NOT EXISTS approval_steps (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      requisition_id INTEGER NOT NULL,
-      step_level INTEGER NOT NULL CHECK (step_level >= 1 AND step_level <= 6),
-      status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
-      assigned_role_level INTEGER NOT NULL,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (requisition_id) REFERENCES requisitions(id)
-    )
-  `);
-
-  rawDb.run(`
-    CREATE TABLE IF NOT EXISTS approval_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      requisition_id INTEGER NOT NULL,
-      approval_step_id INTEGER,
-      user_id INTEGER NOT NULL,
-      action TEXT NOT NULL,
-      comments TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (requisition_id) REFERENCES requisitions(id),
-      FOREIGN KEY (approval_step_id) REFERENCES approval_steps(id),
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )
-  `);
-
-  rawDb.run(`
-    CREATE TABLE IF NOT EXISTS quotations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      requisition_id INTEGER NOT NULL,
-      provider_name TEXT NOT NULL,
-      file_path TEXT NOT NULL,
-      original_filename TEXT NOT NULL,
-      created_by INTEGER NOT NULL,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (requisition_id) REFERENCES requisitions(id),
-      FOREIGN KEY (created_by) REFERENCES users(id)
-    )
-  `);
-
-  rawDb.run(`
-    CREATE TABLE IF NOT EXISTS quotation_documents (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      quotation_id INTEGER NOT NULL,
-      doc_type TEXT NOT NULL CHECK(doc_type IN ('rut', 'camara_comercio', 'cedula', 'certificado_bancario')),
-      file_path TEXT NOT NULL,
-      original_filename TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (quotation_id) REFERENCES quotations(id),
-      UNIQUE(quotation_id, doc_type)
-    )
-  `);
-
-  logger.info('Database tables created successfully');
-
-  // Seed default users if none exist
-  const result = rawDb.exec('SELECT COUNT(*) as count FROM users');
-  const userCount = result.length > 0 ? result[0].values[0][0] : 0;
-
-  if (userCount === 0) {
-    seedDefaultUsers();
-  }
-
-  // Persist to disk
+  // 4. Persist to disk
   _saveToDisk();
 
+  // 5. Start auto-save and register shutdown handlers
+  _startAutoSave();
+  _registerShutdownHandlers();
+
   logger.info('Database initialization complete');
-};
-
-const seedDefaultUsers = () => {
-  logger.info('Seeding default users...');
-
-  const passwordHash = bcrypt.hashSync('cid2024', 10);
-
-  const defaultUsers = [
-    { username: 'coord.territorio', email: 'coord.territorio@cid.org.co', full_name: 'Coordinador/a de Territorio', role_level: 1, territory: 'Chocó' },
-    { username: 'coord.territorio2', email: 'coord.territorio2@cid.org.co', full_name: 'Coordinador/a de Territorio', role_level: 1, territory: 'Santander' },
-    { username: 'dir.programatica', email: 'dir.programatica@cid.org.co', full_name: 'Director/a Programática', role_level: 2, territory: null },
-    { username: 'rep.legal', email: 'rep.legal@cid.org.co', full_name: 'Representante Legal', role_level: 3, territory: null },
-    { username: 'enc.compras', email: 'enc.compras@cid.org.co', full_name: 'Encargado/a de Compras', role_level: 4, territory: null },
-    { username: 'analista', email: 'analista@cid.org.co', full_name: 'Analista', role_level: 5, territory: null },
-    { username: 'revisor', email: 'revisor@cid.org.co', full_name: 'Revisor/a', role_level: 6, territory: null },
-  ];
-
-  rawDb.run('BEGIN TRANSACTION');
-  try {
-    for (const user of defaultUsers) {
-      rawDb.run(
-        'INSERT INTO users (username, email, password_hash, full_name, role_level, territory) VALUES (?, ?, ?, ?, ?, ?)',
-        [user.username, user.email, passwordHash, user.full_name, user.role_level, user.territory],
-      );
-    }
-    rawDb.run('COMMIT');
-  } catch (err) {
-    rawDb.run('ROLLBACK');
-    throw err;
-  }
-
-  logger.info(`Seeded ${defaultUsers.length} default users`);
 };
 
 // Export the db wrapper (used by models) and the init function (used by server.js)
