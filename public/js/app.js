@@ -708,7 +708,7 @@ const App = (() => {
         const blob = await response.blob();
         const blobUrl = URL.createObjectURL(blob);
         _currentModalBlobUrl = blobUrl;
-        body.innerHTML = `<iframe src="${blobUrl}#toolbar=1&navpanes=0&scrollbar=1&zoom=50" title="Vista previa PDF"></iframe>`;
+        body.innerHTML = `<iframe src="${blobUrl}#toolbar=1&navpanes=0&scrollbar=1&zoom=63" title="Vista previa PDF"></iframe>`;
         if (downloadBtn) {
           downloadBtn.href = blobUrl;
           downloadBtn.download = filename || 'archivo.pdf';
@@ -1115,7 +1115,7 @@ const App = (() => {
       const url = URL.createObjectURL(file);
       previewBody.innerHTML = `
         <div class="upload-preview__pdf-wrap">
-          <iframe src="${url}#toolbar=0&navpanes=0&scrollbar=1&zoom=50" class="upload-preview__pdf" title="Vista previa PDF"></iframe>
+          <iframe src="${url}#toolbar=0&navpanes=0&scrollbar=1&zoom=63" class="upload-preview__pdf" title="Vista previa PDF"></iframe>
         </div>
         <div class="upload-preview__info">
           <div class="upload-preview__filename">${escapeHtml(fileName)}</div>
