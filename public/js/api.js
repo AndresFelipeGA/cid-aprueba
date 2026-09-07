@@ -148,6 +148,25 @@ const API = (() => {
     return request('GET', `/requisitions/${requisitionId}/quotations/${quotationId}/documents/${documentId}/download`);
   }
 
+  // --- Projects ---
+
+  /**
+   * Get all active projects.
+   * @returns {Promise<Object>} API response with projects array
+   */
+  async function getProjects() {
+    return request('GET', '/projects');
+  }
+
+  /**
+   * Create a new project.
+   * @param {Object} projectData - Project data
+   * @returns {Promise<Object>} API response with created project
+   */
+  async function createProject(projectData) {
+    return request('POST', '/projects', projectData);
+  }
+
   // --- Dashboard ---
 
   async function getDashboardStats() {
@@ -238,6 +257,8 @@ const API = (() => {
     deleteQuotationDocument,
     downloadQuotationFile,
     downloadQuotationDocument,
+    getProjects,
+    createProject,
     getDashboardStats,
     getPending,
     getRecent,

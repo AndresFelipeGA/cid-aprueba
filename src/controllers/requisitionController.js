@@ -3,6 +3,7 @@ const fs = require('fs');
 const Requisition = require('../models/Requisition');
 const ApprovalStep = require('../models/ApprovalStep');
 const ApprovalLog = require('../models/ApprovalLog');
+const Project = require('../models/Project');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 
@@ -48,10 +49,18 @@ const requisitionController = {
       throw new AppError('Solo los Coordinadores/as de Territorio pueden crear requisiciones', 403, 'FORBIDDEN');
     }
 
-    const { title, description } = req.body;
+    const { title, description, project_id } = req.body;
 
     if (!req.file) {
       throw new AppError('El archivo es requerido', 400, 'FILE_REQUIRED');
+    }
+
+    // Validate project exists if project_id is provided
+    if (project_id) {
+      const project = Project.findById(project_id);
+      if (!project) {
+        throw new AppError('El proyecto seleccionado no existe', 400, 'PROJECT_NOT_FOUND');
+      }
     }
 
     const requisition = Requisition.create({
@@ -60,6 +69,7 @@ const requisitionController = {
       filePath: req.file.path,
       originalFilename: req.file.originalname,
       uploadedBy: req.user.id,
+      projectId: project_id || null,
     });
 
     // Create all 7 approval steps

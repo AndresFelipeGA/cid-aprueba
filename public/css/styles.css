@@ -1896,6 +1896,38 @@ textarea.form__input {
   display: block;
 }
 
+/* --- Project Select --- */
+.project-select {
+  cursor: pointer;
+}
+
+.project-select option[value="new"] {
+  font-weight: 700;
+  color: var(--color-primary);
+  border-top: 1px solid var(--color-border);
+}
+
+/* --- Project Modal --- */
+.project-modal__content {
+  max-width: 520px;
+}
+
+.project-modal__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+
+@media (max-width: 480px) {
+  .project-modal__row {
+    grid-template-columns: 1fr;
+  }
+
+  .project-modal__content {
+    max-width: 100%;
+  }
+}
+
 /* --- Search & Filters --- */
 .search-filters {
   display: flex;

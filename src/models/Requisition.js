@@ -4,18 +4,22 @@ const Quotation = require('./Quotation');
 const Requisition = {
   findById(id) {
     return db.prepare(`
-      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username
+      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username,
+             p.name AS project_name, p.code AS project_code
       FROM requisitions r
       JOIN users u ON r.uploaded_by = u.id
+      LEFT JOIN projects p ON r.project_id = p.id
       WHERE r.id = ?
     `).get(id);
   },
 
   findAll({ limit = 20, offset = 0, userRoleLevel } = {}) {
     let query = `
-      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username
+      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username,
+             p.name AS project_name, p.code AS project_code
       FROM requisitions r
       JOIN users u ON r.uploaded_by = u.id
+      LEFT JOIN projects p ON r.project_id = p.id
     `;
     const params = [];
 
@@ -54,9 +58,11 @@ const Requisition = {
 
   findByStatus(status, { limit = 20, offset = 0 } = {}) {
     const items = db.prepare(`
-      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username
+      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username,
+             p.name AS project_name, p.code AS project_code
       FROM requisitions r
       JOIN users u ON r.uploaded_by = u.id
+      LEFT JOIN projects p ON r.project_id = p.id
       WHERE r.status = ?
       ORDER BY r.created_at DESC
       LIMIT ? OFFSET ?
@@ -69,11 +75,11 @@ const Requisition = {
     return { items, total };
   },
 
-  create({ title, description, filePath, originalFilename, uploadedBy }) {
+  create({ title, description, filePath, originalFilename, uploadedBy, projectId }) {
     const result = db.prepare(`
-      INSERT INTO requisitions (title, description, file_path, original_filename, uploaded_by, status, current_approval_level)
-      VALUES (?, ?, ?, ?, ?, 'pending', 1)
-    `).run(title, description || null, filePath, originalFilename, uploadedBy);
+      INSERT INTO requisitions (title, description, file_path, original_filename, uploaded_by, project_id, status, current_approval_level)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending', 1)
+    `).run(title, description || null, filePath, originalFilename, uploadedBy, projectId || null);
 
     return Requisition.findById(result.lastInsertRowid);
   },
@@ -168,8 +174,11 @@ const Requisition = {
     const placeholders = matchingSteps.map(() => '?').join(',');
 
     const items = db.prepare(`
-      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username
-      FROM requisitions r JOIN users u ON r.uploaded_by = u.id
+      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username,
+             p.name AS project_name, p.code AS project_code
+      FROM requisitions r
+      JOIN users u ON r.uploaded_by = u.id
+      LEFT JOIN projects p ON r.project_id = p.id
       WHERE r.current_approval_level IN (${placeholders})
         AND r.status IN ('pending', 'in_review')
       ORDER BY r.created_at ASC LIMIT ? OFFSET ?
@@ -193,9 +202,11 @@ const Requisition = {
 
   findRecent({ limit = 10 } = {}) {
     return db.prepare(`
-      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username
+      SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username,
+             p.name AS project_name, p.code AS project_code
       FROM requisitions r
       JOIN users u ON r.uploaded_by = u.id
+      LEFT JOIN projects p ON r.project_id = p.id
       ORDER BY r.updated_at DESC
       LIMIT ?
     `).all(limit);

@@ -572,6 +572,7 @@ const App = (() => {
           <thead>
             <tr>
               <th>Título</th>
+              <th>Proyecto</th>
               <th>Estado</th>
               <th>Nivel</th>
               <th>Subido por</th>
@@ -585,6 +586,7 @@ const App = (() => {
       html += `
         <tr class="table__row--clickable" data-action="view-requisition" data-id="${requisition.id}">
           <td>${escapeHtml(requisition.title)}</td>
+          <td>${requisition.project_name ? escapeHtml(requisition.project_name) : '<span style="color:var(--color-text-light)">—</span>'}</td>
           <td>${statusBadge(requisition.status)}</td>
           <td>${stepLabel(requisition.current_approval_level)}</td>
           <td>${escapeHtml(requisition.uploader_name)}</td>
@@ -900,6 +902,10 @@ const App = (() => {
                   <span class="req-detail__meta-value">${stepLabel(requisition.current_approval_level)} (${roleNameForStep(requisition.current_approval_level)})</span>
                 </li>
                 <li>
+                  <span class="req-detail__meta-label">Proyecto</span>
+                  <span class="req-detail__meta-value">${requisition.project_name ? escapeHtml(requisition.project_name) + (requisition.project_code ? ' (' + escapeHtml(requisition.project_code) + ')' : '') : '<span style="color:var(--color-text-light)">Sin proyecto</span>'}</span>
+                </li>
+                <li>
                   <span class="req-detail__meta-label">Subido por</span>
                   <span class="req-detail__meta-value">${escapeHtml(requisition.uploader_name)}</span>
                 </li>
@@ -1080,7 +1086,7 @@ const App = (() => {
 
   // --- Create Requisition Form View ---
 
-  function renderCreateRequisitionForm(container) {
+  async function renderCreateRequisitionForm(container) {
     // Client-side guard: only role_level 1 can create requisitions
     if (!currentUser || currentUser.role_level !== 1) {
       container.innerHTML = `
@@ -1089,6 +1095,22 @@ const App = (() => {
       setTimeout(() => navigate('dashboard'), 2000);
       return;
     }
+
+    // Load projects for the dropdown
+    let projects = [];
+    try {
+      const projectsResult = await API.getProjects();
+      projects = projectsResult.data.projects || [];
+    } catch (_err) {
+      // If projects fail to load, continue without them
+    }
+
+    let projectOptions = '<option value="" selected>Seleccione un proyecto...</option>';
+    for (const project of projects) {
+      const codeLabel = project.code ? ` (${escapeHtml(project.code)})` : '';
+      projectOptions += `<option value="${project.id}">${escapeHtml(project.name)}${codeLabel}</option>`;
+    }
+    projectOptions += '<option value="new" class="project-select__new-option">+ Crear nuevo proyecto</option>';
 
     let html = `
       <a href="#" class="back-link" data-action="navigate" data-view="requisitions">&larr; Volver a requisiciones</a>
@@ -1105,6 +1127,12 @@ const App = (() => {
             <div class="form__group">
               <label class="form__label" for="upload-description">Descripción</label>
               <textarea class="form__input" id="upload-description" rows="3" maxlength="1000" placeholder="Descripción opcional de la requisición"></textarea>
+            </div>
+            <div class="form__group">
+              <label class="form__label" for="upload-project">Proyecto</label>
+              <select class="form__input project-select" id="upload-project">
+                ${projectOptions}
+              </select>
             </div>
             <div class="form__group">
               <label class="form__label">Archivo</label>
@@ -1134,6 +1162,15 @@ const App = (() => {
     `;
 
     container.innerHTML = html;
+
+    // Project dropdown: open popup when "new" is selected
+    const projectSelect = $('#upload-project');
+    projectSelect.addEventListener('change', () => {
+      if (projectSelect.value === 'new') {
+        projectSelect.value = ''; // Reset to placeholder
+        showCreateProjectModal();
+      }
+    });
 
     // File drop area behavior
     const dropArea = $('#file-drop-area');
@@ -1261,6 +1298,8 @@ const App = (() => {
 
     const title = $('#upload-title').value.trim();
     const description = $('#upload-description').value.trim();
+    const projectSelect = $('#upload-project');
+    const projectId = projectSelect ? projectSelect.value : '';
     const fileInput = $('#upload-file');
     const btn = $('#upload-btn');
     const feedback = $('#upload-feedback');
@@ -1278,6 +1317,9 @@ const App = (() => {
     const formData = new FormData();
     formData.append('title', title);
     formData.append('description', description);
+    if (projectId && projectId !== 'new') {
+      formData.append('project_id', projectId);
+    }
     formData.append('file', fileInput.files[0]);
 
     btn.disabled = true;
@@ -1294,6 +1336,98 @@ const App = (() => {
       feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al crear la requisición')}</div>`;
       btn.disabled = false;
       btn.textContent = 'Crear Requisición';
+    }
+  }
+
+  // --- Create Project Modal ---
+
+  /**
+   * Show the create project modal popup.
+   */
+  function showCreateProjectModal() {
+    const modal = $('#project-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      const input = $('#project-modal-name');
+      if (input) input.focus();
+    }
+  }
+
+  /**
+   * Hide the create project modal and reset fields.
+   */
+  function hideCreateProjectModal() {
+    const modal = $('#project-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      const form = $('#project-modal-form');
+      if (form) form.reset();
+      const feedback = $('#project-modal-feedback');
+      if (feedback) feedback.innerHTML = '';
+    }
+  }
+
+  /**
+   * Handle create project form submission from the modal.
+   * @param {Event} e - Submit event
+   */
+  async function handleCreateProject(e) {
+    e.preventDefault();
+
+    const name = $('#project-modal-name').value.trim();
+    const code = $('#project-modal-code').value.trim();
+    const location = $('#project-modal-location').value.trim();
+    const description = $('#project-modal-description').value.trim();
+    const startDate = $('#project-modal-start-date').value;
+    const endDate = $('#project-modal-end-date').value;
+    const btn = $('#project-modal-save');
+    const feedback = $('#project-modal-feedback');
+
+    if (!name) {
+      feedback.innerHTML = '<div class="alert alert--error">El nombre del proyecto es obligatorio</div>';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Creando...';
+    feedback.innerHTML = '';
+
+    try {
+      const result = await API.createProject({
+        name,
+        code: code || undefined,
+        location: location || undefined,
+        description: description || undefined,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+      });
+
+      const newProject = result.data.project;
+
+      // Refresh the project dropdown and auto-select the new project
+      const projectSelect = $('#upload-project');
+      if (projectSelect && newProject) {
+        const codeLabel = newProject.code ? ` (${newProject.code})` : '';
+        const newOption = document.createElement('option');
+        newOption.value = newProject.id;
+        newOption.textContent = `${newProject.name}${codeLabel}`;
+
+        // Insert before the last option ("+ Crear nuevo proyecto")
+        const lastOption = projectSelect.querySelector('option[value="new"]');
+        if (lastOption) {
+          projectSelect.insertBefore(newOption, lastOption);
+        } else {
+          projectSelect.appendChild(newOption);
+        }
+        projectSelect.value = newProject.id;
+      }
+
+      hideCreateProjectModal();
+    } catch (err) {
+      feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al crear el proyecto')}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Crear Proyecto';
     }
   }
 
@@ -2165,6 +2299,22 @@ const App = (() => {
       emailBackdrop.addEventListener('click', hideEmailModal);
     }
 
+    // Project modal
+    const projectForm = $('#project-modal-form');
+    if (projectForm) {
+      projectForm.addEventListener('submit', handleCreateProject);
+    }
+
+    const projectCancel = $('#project-modal-cancel');
+    if (projectCancel) {
+      projectCancel.addEventListener('click', hideCreateProjectModal);
+    }
+
+    const projectBackdrop = document.querySelector('#project-modal .modal__backdrop');
+    if (projectBackdrop) {
+      projectBackdrop.addEventListener('click', hideCreateProjectModal);
+    }
+
     // Document preview modal
     const docModalClose = $('#document-modal-close');
     if (docModalClose) {
@@ -2178,6 +2328,13 @@ const App = (() => {
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        // Close project modal if open
+        const projectModal = $('#project-modal');
+        if (projectModal && !projectModal.classList.contains('hidden')) {
+          hideCreateProjectModal();
+          return;
+        }
+        // Close document modal if open
         const modal = document.querySelector('#document-modal');
         if (modal && modal.style.display !== 'none') {
           closeDocumentModal();

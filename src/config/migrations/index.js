@@ -17,6 +17,7 @@ const migrations = [
   require('./001_initial_schema'),
   require('./002_seed_users'),
   require('./003_workflow_restructure'),
+  require('./004_projects'),
 ];
 
 /**

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CID Aprueba</title>
-  <link rel="stylesheet" href="css/styles.css?v=16">
+  <link rel="stylesheet" href="css/styles.css?v=17">
 </head>
 <body>
 
@@ -110,6 +110,50 @@
     </div>
   </div>
 
+  <!-- ========== Create Project Modal ========== -->
+  <div id="project-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="project-modal-title">
+    <div class="modal__backdrop"></div>
+    <div class="modal__content project-modal__content">
+      <h2 class="modal__title" id="project-modal-title">Crear Nuevo Proyecto</h2>
+      <p class="modal__text">Complete los datos del proyecto. Solo el nombre es obligatorio.</p>
+      <div id="project-modal-feedback"></div>
+      <form id="project-modal-form">
+        <div class="form__group">
+          <label class="form__label" for="project-modal-name">Nombre del Proyecto *</label>
+          <input class="form__input" type="text" id="project-modal-name" required placeholder="Ej: Construcción Sede Chocó">
+        </div>
+        <div class="project-modal__row">
+          <div class="form__group">
+            <label class="form__label" for="project-modal-code">Código</label>
+            <input class="form__input" type="text" id="project-modal-code" placeholder="Ej: PRY-001">
+          </div>
+          <div class="form__group">
+            <label class="form__label" for="project-modal-location">Ubicación</label>
+            <input class="form__input" type="text" id="project-modal-location" placeholder="Ej: Chocó">
+          </div>
+        </div>
+        <div class="form__group">
+          <label class="form__label" for="project-modal-description">Descripción</label>
+          <textarea class="form__input" id="project-modal-description" rows="2" placeholder="Descripción opcional del proyecto"></textarea>
+        </div>
+        <div class="project-modal__row">
+          <div class="form__group">
+            <label class="form__label" for="project-modal-start-date">Fecha de Inicio</label>
+            <input class="form__input" type="date" id="project-modal-start-date">
+          </div>
+          <div class="form__group">
+            <label class="form__label" for="project-modal-end-date">Fecha de Fin</label>
+            <input class="form__input" type="date" id="project-modal-end-date">
+          </div>
+        </div>
+        <div class="modal__actions">
+          <button class="btn btn--primary" type="submit" id="project-modal-save">Crear Proyecto</button>
+          <button class="btn btn--outline" type="button" id="project-modal-cancel">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- ========== Document Preview Modal ========== -->
   <div id="document-modal" class="document-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="document-modal-title">
     <div class="document-modal__backdrop"></div>
@@ -128,8 +172,8 @@
   </div>
 
   <!-- Scripts -->
-  <script src="js/api.js?v=16"></script>
-  <script src="js/app.js?v=16"></script>
+  <script src="js/api.js?v=17"></script>
+  <script src="js/app.js?v=17"></script>
 
 </body>
 </html>

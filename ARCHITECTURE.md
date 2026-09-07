@@ -77,7 +77,8 @@ cid-aprueba/
 │   │   └── migrations/        # Database migration files
 │   │       ├── index.js       # Migration runner
 │   │       ├── 001_initial_schema.js  # Initial 6-table schema
-│   │       └── 002_seed_users.js      # Default user seeding
+│   │       ├── 002_seed_users.js      # Default user seeding
+│   │       └── 004_projects.js        # Projects table and requisitions.project_id
 │   │
 │   ├── middleware/
 │   │   ├── authenticate.js    # JWT verification middleware
@@ -91,7 +92,8 @@ cid-aprueba/
 │   │   ├── ApprovalStep.js    # Approval step management (STEP_TO_ROLE_MAP)
 │   │   ├── ApprovalLog.js     # Audit log queries
 │   │   ├── Quotation.js       # Quotation CRUD and queries
-│   │   └── QuotationDocument.js # Quotation supporting documents
+│   │   ├── QuotationDocument.js # Quotation supporting documents
+│   │   └── Project.js         # Project CRUD and queries
 │   │
 │   ├── controllers/
 │   │   ├── authController.js      # Login, register, token refresh
@@ -99,7 +101,8 @@ cid-aprueba/
 │   │   ├── approvalController.js  # Approve, reject, return
 │   │   ├── quotationController.js # Quotation CRUD and file management
 │   │   ├── dashboardController.js # Metrics and summaries
-│   │   └── userController.js      # User management (CRUD)
+│   │   ├── userController.js      # User management (CRUD)
+│   │   └── projectController.js   # Project CRUD
 │   │
 │   ├── routes/
 │   │   ├── auth.js
@@ -107,7 +110,8 @@ cid-aprueba/
 │   │   ├── approvals.js
 │   │   ├── quotations.js
 │   │   ├── dashboard.js
-│   │   └── users.js               # User management routes
+│   │   ├── users.js               # User management routes
+│   │   └── projects.js            # Project routes
 │   │
 │   └── utils/
 │       ├── AppError.js        # Custom error class
@@ -145,8 +149,10 @@ cid-aprueba/
 erDiagram
     users ||--o{ requisitions : uploads
     users ||--o{ approval_logs : performs
+    users ||--o{ projects : creates
     requisitions ||--o{ approval_steps : has
     approval_steps ||--o{ approval_logs : generates
+    projects ||--o{ requisitions : contains
 
     users {
         integer id PK
@@ -160,6 +166,20 @@ erDiagram
         text updated_at
     }
 
+    projects {
+        integer id PK
+        text name
+        text code UK
+        text location
+        text description
+        text start_date
+        text end_date
+        integer is_active
+        integer created_by FK
+        text created_at
+        text updated_at
+    }
+
     requisitions {
         integer id PK
         text title
@@ -167,6 +187,7 @@ erDiagram
         text file_path
         text original_filename
         integer uploaded_by FK
+        integer project_id FK
         text status
         integer current_approval_level
         integer selected_quotation_id FK
@@ -211,6 +232,22 @@ erDiagram
 | `created_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 | `updated_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 
+#### `projects`
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PK, AUTOINCREMENT | Unique project ID |
+| `name` | TEXT | NOT NULL | Project name |
+| `code` | TEXT | UNIQUE | Optional unique project code |
+| `location` | TEXT | | Project location |
+| `description` | TEXT | | Optional description |
+| `start_date` | TEXT | | Start date (ISO 8601) |
+| `end_date` | TEXT | | End date (ISO 8601) |
+| `is_active` | INTEGER | DEFAULT 1 | Soft-delete flag |
+| `created_by` | INTEGER | FK → users.id, NOT NULL | User who created the project |
+| `created_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
+| `updated_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
+
 #### `requisitions`
 
 | Column | Type | Constraints | Description |
@@ -221,6 +258,7 @@ erDiagram
 | `file_path` | TEXT | NOT NULL | Server path to uploaded file |
 | `original_filename` | TEXT | NOT NULL | Original upload filename |
 | `uploaded_by` | INTEGER | FK → users.id | Uploader user ID |
+| `project_id` | INTEGER | FK → projects.id, NULL | Associated project (optional) |
 | `status` | TEXT | NOT NULL | `pending`, `in_review`, `approved`, `rejected` |
 | `current_approval_level` | INTEGER | DEFAULT 1 | Which step level is currently being reviewed (1–7) |
 | `selected_quotation_id` | INTEGER | FK → quotations.id, NULL | The quotation selected by the Representante Legal at step 5 |
@@ -294,6 +332,7 @@ Migration files live in [`src/config/migrations/`](src/config/migrations/) and a
 |-----------|---------|-------------|
 | [`001_initial_schema.js`](src/config/migrations/001_initial_schema.js) | 1 | Creates the 6 core tables (users, requisitions, approval_steps, approval_logs, quotations, quotation_documents) |
 | [`002_seed_users.js`](src/config/migrations/002_seed_users.js) | 2 | Seeds 7 default users (only if users table is empty) |
+| [`004_projects.js`](src/config/migrations/004_projects.js) | 4 | Creates the `projects` table and adds `project_id` column to `requisitions` |
 
 ### Data Persistence & Safety
 
@@ -343,6 +382,14 @@ All endpoints return JSON. Protected routes require `Authorization: Bearer <toke
 | GET | `/api/dashboard/stats` | Yes | Aggregate metrics: total, pending, approved, rejected |
 | GET | `/api/dashboard/pending` | Yes | Requisitions awaiting current user action |
 | GET | `/api/dashboard/recent` | Yes | Recently processed requisitions |
+
+### Projects
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/projects` | Yes | List all active projects |
+| POST | `/api/projects` | Yes | Create a new project |
+| GET | `/api/projects/:id` | Yes | Get project by ID |
 
 ### User Management (Representante Legal only — role_level 3)
 
@@ -534,6 +581,8 @@ The frontend is a set of static HTML pages served from `/public`. JavaScript mod
 | Page | Purpose |
 |------|---------|
 | `index.html` | Single-page app: login, dashboard, requisition list, detail, create, profile, users (Gestión de Usuarios) |
+
+> **Nota:** El formulario "Crear Requisición" ahora incluye un selector de proyecto con opción de creación en línea (popup) para asociar una requisición a un proyecto existente o nuevo.
 
 ### Brand Design Tokens
 
