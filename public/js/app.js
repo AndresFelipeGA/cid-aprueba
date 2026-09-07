@@ -463,12 +463,14 @@ const App = (() => {
 
   // --- Requisitions List View ---
 
+  let _allRequisitions = [];
+
   async function renderRequisitions(container) {
     showLoading(container);
 
     try {
       const result = await API.getRequisitions();
-      const requisitions = result.data.items || [];
+      _allRequisitions = result.data.items || [];
 
       let html = `
         <div class="main__header">
@@ -482,47 +484,122 @@ const App = (() => {
 
       html += `</div>`;
 
-      if (requisitions.length === 0) {
-        html += `<div class="empty">No hay requisiciones registradas</div>`;
-      } else {
-        html += `
-          <div class="table-wrap">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>Título</th>
-                  <th>Estado</th>
-                  <th>Nivel</th>
-                  <th>Subido por</th>
-                  <th>Fecha</th>
-                </tr>
-              </thead>
-              <tbody>
-        `;
+      // Search & Filters bar
+      html += `
+        <div class="search-filters">
+          <input type="text" class="search-filters__input" id="req-search" placeholder="🔍 Buscar requisición..." aria-label="Buscar requisición">
+          <select class="search-filters__select" id="req-filter-status" aria-label="Filtrar por estado">
+            <option value="">Estado: Todos</option>
+            <option value="pending">Pendiente</option>
+            <option value="in_review">En Revisión</option>
+            <option value="approved">Aprobada</option>
+            <option value="rejected">Rechazada</option>
+          </select>
+          <select class="search-filters__select" id="req-filter-level" aria-label="Filtrar por nivel">
+            <option value="">Nivel: Todos</option>
+            <option value="1">Aprobación Territorial</option>
+            <option value="2">Aprobación Programática</option>
+            <option value="3">Aprobación Legal</option>
+            <option value="4">Gestión de Cotizaciones</option>
+            <option value="5">Selección de Cotización</option>
+            <option value="6">Aprobación Financiera</option>
+            <option value="7">Aprobación Final</option>
+          </select>
+        </div>
+      `;
 
-        for (const requisition of requisitions) {
-          html += `
-            <tr class="table__row--clickable" data-action="view-requisition" data-id="${requisition.id}">
-              <td>${escapeHtml(requisition.title)}</td>
-              <td>${statusBadge(requisition.status)}</td>
-              <td>${stepLabel(requisition.current_approval_level)}</td>
-              <td>${escapeHtml(requisition.uploader_name)}</td>
-              <td>${formatDateShort(requisition.created_at)}</td>
-            </tr>
-          `;
-        }
-
-        html += `
-              </tbody>
-            </table>
-          </div>
-        `;
-      }
+      html += `<div id="req-table-container"></div>`;
 
       container.innerHTML = html;
+
+      // Render initial table
+      renderRequisitionsTable(_allRequisitions);
+
+      // Attach filter listeners
+      const searchInput = $('#req-search');
+      const statusSelect = $('#req-filter-status');
+      const levelSelect = $('#req-filter-level');
+
+      const applyReqFilters = () => {
+        const searchTerm = searchInput.value.trim().toLowerCase();
+        const statusFilter = statusSelect.value;
+        const levelFilter = levelSelect.value;
+
+        const filtered = _allRequisitions.filter((req) => {
+          // Search by title or description
+          if (searchTerm) {
+            const title = (req.title || '').toLowerCase();
+            const description = (req.description || '').toLowerCase();
+            const uploader = (req.uploader_name || '').toLowerCase();
+            if (!title.includes(searchTerm) && !description.includes(searchTerm) && !uploader.includes(searchTerm)) {
+              return false;
+            }
+          }
+          // Filter by status
+          if (statusFilter && req.status !== statusFilter) {
+            return false;
+          }
+          // Filter by level
+          if (levelFilter && req.current_approval_level !== parseInt(levelFilter, 10)) {
+            return false;
+          }
+          return true;
+        });
+
+        renderRequisitionsTable(filtered);
+      };
+
+      searchInput.addEventListener('input', applyReqFilters);
+      statusSelect.addEventListener('change', applyReqFilters);
+      levelSelect.addEventListener('change', applyReqFilters);
     } catch (err) {
       showError(container, err.message || 'Error al cargar las requisiciones');
     }
+  }
+
+  function renderRequisitionsTable(requisitions) {
+    const tableContainer = $('#req-table-container');
+    if (!tableContainer) return;
+
+    if (requisitions.length === 0) {
+      tableContainer.innerHTML = `<div class="empty">No se encontraron requisiciones</div>`;
+      return;
+    }
+
+    let html = `
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Título</th>
+              <th>Estado</th>
+              <th>Nivel</th>
+              <th>Subido por</th>
+              <th>Fecha</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    for (const requisition of requisitions) {
+      html += `
+        <tr class="table__row--clickable" data-action="view-requisition" data-id="${requisition.id}">
+          <td>${escapeHtml(requisition.title)}</td>
+          <td>${statusBadge(requisition.status)}</td>
+          <td>${stepLabel(requisition.current_approval_level)}</td>
+          <td>${escapeHtml(requisition.uploader_name)}</td>
+          <td>${formatDateShort(requisition.created_at)}</td>
+        </tr>
+      `;
+    }
+
+    html += `
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    tableContainer.innerHTML = html;
   }
 
   // --- Quotation Panel Constants ---
@@ -1226,6 +1303,8 @@ const App = (() => {
    * Render the user management view with user list table.
    * @param {HTMLElement} container - Main content container
    */
+  let _allUsers = [];
+
   async function renderUsers(container) {
     // Guard: only role_level 3 can access
     if (!currentUser || currentUser.role_level !== 3) {
@@ -1240,12 +1319,31 @@ const App = (() => {
 
     try {
       const result = await API.getUsers();
-      const users = result.data.users || [];
+      _allUsers = result.data.users || [];
 
       let html = `
         <div class="main__header">
           <h2 class="main__title">Gestión de Usuarios</h2>
           <button class="btn btn--primary" data-action="show-create-user">+ Crear Usuario</button>
+        </div>
+
+        <!-- Search & Filters -->
+        <div class="search-filters">
+          <input type="text" class="search-filters__input" id="user-search" placeholder="🔍 Buscar usuario..." aria-label="Buscar usuario">
+          <select class="search-filters__select" id="user-filter-role" aria-label="Filtrar por rol">
+            <option value="">Rol: Todos</option>
+            <option value="1">Coordinador/a de Territorio</option>
+            <option value="2">Director/a Programática</option>
+            <option value="3">Representante Legal</option>
+            <option value="4">Encargado/a de Compras</option>
+            <option value="5">Área Financiera</option>
+            <option value="6">Área de Compras</option>
+          </select>
+          <select class="search-filters__select" id="user-filter-status" aria-label="Filtrar por estado">
+            <option value="">Estado: Todos</option>
+            <option value="1">Activo</option>
+            <option value="0">Inactivo</option>
+          </select>
         </div>
 
         <!-- Create User Form (hidden by default) -->
@@ -1371,56 +1469,51 @@ const App = (() => {
         </div>
       `;
 
-      // User table
-      if (users.length === 0) {
-        html += `<div class="empty">No hay usuarios registrados</div>`;
-      } else {
-        html += `
-          <div class="table-wrap">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>Nombre</th>
-                  <th>Usuario</th>
-                  <th>Email</th>
-                  <th>Rol</th>
-                  <th>Territorio</th>
-                  <th>Estado</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-        `;
-
-        for (const user of users) {
-          const statusClass = user.is_active ? 'badge--user-active' : 'badge--user-inactive';
-          const statusText = user.is_active ? 'Activo' : 'Inactivo';
-
-          html += `
-            <tr>
-              <td>${escapeHtml(user.full_name)}</td>
-              <td>${escapeHtml(user.username)}</td>
-              <td>${escapeHtml(user.email || '—')}</td>
-              <td>${escapeHtml(roleName(user.role_level, user.gender))}</td>
-              <td>${escapeHtml(user.territory || '—')}</td>
-              <td><span class="badge ${statusClass}">${statusText}</span></td>
-              <td class="user-actions">
-                <button class="btn btn--outline btn--sm" data-action="edit-user" data-user='${escapeHtml(JSON.stringify(user))}' title="Editar">✏️</button>
-                <button class="btn btn--outline btn--sm" data-action="reset-user-password" data-user-id="${user.id}" data-username="${escapeHtml(user.username)}" title="Restablecer contraseña">🔑</button>
-                <button class="btn btn--sm ${user.is_active ? 'btn--danger' : 'btn--secondary'}" data-action="toggle-user-active" data-user-id="${user.id}" data-username="${escapeHtml(user.username)}" data-active="${user.is_active}" title="${user.is_active ? 'Desactivar' : 'Activar'}">${user.is_active ? '🚫' : '✅'}</button>
-              </td>
-            </tr>
-          `;
-        }
-
-        html += `
-              </tbody>
-            </table>
-          </div>
-        `;
-      }
+      // User table container
+      html += `<div id="user-table-container"></div>`;
 
       container.innerHTML = html;
+
+      // Render initial table
+      renderUsersTable(_allUsers);
+
+      // Attach filter listeners
+      const userSearch = $('#user-search');
+      const roleSelect = $('#user-filter-role');
+      const userStatusSelect = $('#user-filter-status');
+
+      const applyUserFilters = () => {
+        const searchTerm = userSearch.value.trim().toLowerCase();
+        const roleFilter = roleSelect.value;
+        const statusFilter = userStatusSelect.value;
+
+        const filtered = _allUsers.filter((user) => {
+          // Search by name, username, or email
+          if (searchTerm) {
+            const fullName = (user.full_name || '').toLowerCase();
+            const username = (user.username || '').toLowerCase();
+            const email = (user.email || '').toLowerCase();
+            if (!fullName.includes(searchTerm) && !username.includes(searchTerm) && !email.includes(searchTerm)) {
+              return false;
+            }
+          }
+          // Filter by role
+          if (roleFilter && user.role_level !== parseInt(roleFilter, 10)) {
+            return false;
+          }
+          // Filter by status
+          if (statusFilter !== '' && String(user.is_active) !== statusFilter) {
+            return false;
+          }
+          return true;
+        });
+
+        renderUsersTable(filtered);
+      };
+
+      userSearch.addEventListener('input', applyUserFilters);
+      roleSelect.addEventListener('change', applyUserFilters);
+      userStatusSelect.addEventListener('change', applyUserFilters);
 
       // Attach form handlers
       const createForm = $('#create-user-form');
@@ -1440,6 +1533,66 @@ const App = (() => {
     } catch (err) {
       showError(container, err.message || 'Error al cargar los usuarios');
     }
+  }
+
+  /**
+   * Render the user table with the given (filtered) users array.
+   * @param {Array} users - Array of user objects to display
+   */
+  function renderUsersTable(users) {
+    const tableContainer = $('#user-table-container');
+    if (!tableContainer) return;
+
+    if (users.length === 0) {
+      tableContainer.innerHTML = `<div class="empty">No se encontraron usuarios</div>`;
+      return;
+    }
+
+    let html = `
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Usuario</th>
+              <th>Email</th>
+              <th>Rol</th>
+              <th>Territorio</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    for (const user of users) {
+      const statusClass = user.is_active ? 'badge--user-active' : 'badge--user-inactive';
+      const statusText = user.is_active ? 'Activo' : 'Inactivo';
+
+      html += `
+        <tr>
+          <td>${escapeHtml(user.full_name)}</td>
+          <td>${escapeHtml(user.username)}</td>
+          <td>${escapeHtml(user.email || '—')}</td>
+          <td>${escapeHtml(roleName(user.role_level, user.gender))}</td>
+          <td>${escapeHtml(user.territory || '—')}</td>
+          <td><span class="badge ${statusClass}">${statusText}</span></td>
+          <td class="user-actions">
+            <button class="btn btn--outline btn--sm" data-action="edit-user" data-user='${escapeHtml(JSON.stringify(user))}' title="Editar">✏️</button>
+            <button class="btn btn--outline btn--sm" data-action="reset-user-password" data-user-id="${user.id}" data-username="${escapeHtml(user.username)}" title="Restablecer contraseña">🔑</button>
+            <button class="btn btn--sm ${user.is_active ? 'btn--danger' : 'btn--secondary'}" data-action="toggle-user-active" data-user-id="${user.id}" data-username="${escapeHtml(user.username)}" data-active="${user.is_active}" title="${user.is_active ? 'Desactivar' : 'Activar'}">${user.is_active ? '🚫' : '✅'}</button>
+          </td>
+        </tr>
+      `;
+    }
+
+    html += `
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    tableContainer.innerHTML = html;
   }
 
   /**
