@@ -2197,29 +2197,63 @@ textarea.form__input {
 
 .req-progress__bar {
   width: 100%;
-  height: 7px;
-  background: var(--color-border);
-  border-radius: 4px;
+  height: 9px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 6px;
   overflow: hidden;
   position: relative;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .req-progress__fill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: 6px;
   background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
   width: 0;
-  transition: width 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: width 1s cubic-bezier(0.22, 0.61, 0.36, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(200, 90, 42, 0.3);
+}
+
+/* Shimmer/shine animation on filled portion */
+.req-progress__fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 100%
+  );
+  animation: progress-shimmer 2.5s ease-in-out infinite;
+}
+
+@keyframes progress-shimmer {
+  0% { left: -100%; }
+  100% { left: 200%; }
 }
 
 /* Approved: full green */
 .req-progress__fill--approved {
-  background: var(--color-secondary);
+  background: linear-gradient(90deg, #6B8E23, #8FBC3A);
+  box-shadow: 0 1px 3px rgba(107, 142, 35, 0.35);
 }
 
 /* Rejected: red bar */
 .req-progress__fill--rejected {
-  background: var(--color-danger);
+  background: linear-gradient(90deg, #B22222, #D44040);
+  box-shadow: 0 1px 3px rgba(178, 34, 34, 0.35);
+}
+
+/* No shimmer on rejected */
+.req-progress__fill--rejected::after {
+  animation: none;
+  display: none;
 }
 
 .req-progress__label {
@@ -2372,16 +2406,34 @@ textarea.form__input {
   font-weight: 500;
 }
 
+.bar-track {
+  transition: opacity 0.3s ease;
+}
+
 .bar-rect {
-  transition: width 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+  filter: url(#barShadow);
+  cursor: pointer;
+}
+
+.bar-rect:hover {
+  filter: url(#barShadow) brightness(1.15);
+  transform: scaleY(1.06);
+  transform-origin: center;
+}
+
+.bar-glass {
+  pointer-events: none;
+  transition: width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .bar-count {
-  font-size: 11px;
+  font-size: 12px;
   fill: var(--color-text);
-  font-weight: 700;
+  font-weight: 800;
   opacity: 0;
   transition: opacity 0.3s ease;
+  letter-spacing: 0.3px;
 }
 
 /* --- Charts Responsive --- */
@@ -2635,7 +2687,17 @@ body,
 
 /* --- Dark Mode: Progress Bar Track --- */
 [data-theme="dark"] .req-progress__bar {
-  background: #2a2a4a;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .req-progress__fill {
+  box-shadow: 0 1px 4px rgba(200, 90, 42, 0.4);
+}
+
+/* --- Dark Mode: Bar Chart Track --- */
+[data-theme="dark"] .bar-track {
+  fill: rgba(255, 255, 255, 0.04);
 }
 
 /* --- Dark Mode: Badges --- */

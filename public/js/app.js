@@ -643,32 +643,35 @@ const App = (() => {
    * @returns {string} HTML string with SVG
    */
   function buildBarChart(byStep) {
-    const barHeight = 28;
-    const barGap = 10;
+    const barHeight = 30;
+    const barGap = 14;
     const labelWidth = 80;
-    const countWidth = 40;
+    const countWidth = 44;
     const chartWidth = 360;
     const barAreaWidth = chartWidth - labelWidth - countWidth;
     const totalHeight = 7 * (barHeight + barGap) - barGap + 10;
+    const barInnerHeight = barHeight - 6;
+    const cornerRadius = 6;
 
     const maxCount = Math.max(1, ...Object.values(byStep));
 
     let bars = '';
     for (let step = 1; step <= 7; step++) {
       const count = byStep[String(step)] || 0;
-      const barWidth = Math.max(count > 0 ? 4 : 0, (count / maxCount) * barAreaWidth);
+      const barWidth = Math.max(count > 0 ? 6 : 0, (count / maxCount) * barAreaWidth);
       const y = (step - 1) * (barHeight + barGap);
-      const animDelay = ((step - 1) * 0.08).toFixed(2);
-
-      // Gradient stop position based on step
-      const gradientPercent = ((step - 1) / 6) * 100;
+      const barY = y + 3;
 
       bars += `
-        <g class="bar-group" style="animation-delay: ${animDelay}s">
+        <g class="bar-group">
           <text x="${labelWidth - 8}" y="${y + barHeight / 2 + 1}" text-anchor="end" dominant-baseline="central" class="bar-label">Paso ${step}</text>
-          <rect x="${labelWidth}" y="${y + 2}" width="0" height="${barHeight - 4}" rx="4" ry="4"
+          <rect x="${labelWidth}" y="${barY}" width="${barAreaWidth}" height="${barInnerHeight}" rx="${cornerRadius}" ry="${cornerRadius}"
+                class="bar-track" fill="rgba(0,0,0,0.04)" />
+          <rect x="${labelWidth}" y="${barY}" width="0" height="${barInnerHeight}" rx="${cornerRadius}" ry="${cornerRadius}"
                 fill="url(#barGradient)" class="bar-rect" data-target-width="${barWidth}" />
-          <text x="${labelWidth + barWidth + 8}" y="${y + barHeight / 2 + 1}" dominant-baseline="central" class="bar-count" data-target-x="${labelWidth + barWidth + 8}">${count}</text>
+          <rect x="${labelWidth}" y="${barY}" width="0" height="${Math.round(barInnerHeight / 2)}" rx="${cornerRadius}" ry="${cornerRadius}"
+                fill="url(#barGlassOverlay)" class="bar-glass" data-target-width="${barWidth}" />
+          <text x="${labelWidth + barWidth + 10}" y="${y + barHeight / 2 + 1}" dominant-baseline="central" class="bar-count" data-target-x="${labelWidth + barWidth + 10}">${count}</text>
         </g>
       `;
     }
@@ -681,6 +684,13 @@ const App = (() => {
               <stop offset="0%" stop-color="#C85A2A" />
               <stop offset="100%" stop-color="#6B8E23" />
             </linearGradient>
+            <linearGradient id="barGlassOverlay" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="rgba(255,255,255,0.28)" />
+              <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+            </linearGradient>
+            <filter id="barShadow" x="-4%" y="-20%" width="108%" height="160%">
+              <feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="rgba(0,0,0,0.18)" />
+            </filter>
           </defs>
           ${bars}
         </svg>
@@ -693,23 +703,31 @@ const App = (() => {
    */
   function animateBarChart() {
     const bars = document.querySelectorAll('.bar-rect');
+    const glassOverlays = document.querySelectorAll('.bar-glass');
     const counts = document.querySelectorAll('.bar-count');
     requestAnimationFrame(() => {
       bars.forEach((bar, i) => {
         const targetWidth = parseFloat(bar.getAttribute('data-target-width')) || 0;
-        const delay = i * 80;
+        const delay = i * 100;
         setTimeout(() => {
-          bar.style.transition = 'width 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+          bar.style.transition = 'width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1)';
           bar.setAttribute('width', targetWidth);
         }, delay);
       });
-      counts.forEach((countEl, i) => {
-        const targetX = parseFloat(countEl.getAttribute('data-target-x')) || 0;
-        const delay = i * 80;
+      glassOverlays.forEach((glass, i) => {
+        const targetWidth = parseFloat(glass.getAttribute('data-target-width')) || 0;
+        const delay = i * 100;
         setTimeout(() => {
-          countEl.style.transition = 'opacity 0.3s ease';
+          glass.style.transition = 'width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1)';
+          glass.setAttribute('width', targetWidth);
+        }, delay);
+      });
+      counts.forEach((countEl, i) => {
+        const delay = i * 100;
+        setTimeout(() => {
+          countEl.style.transition = 'opacity 0.4s ease';
           countEl.style.opacity = '1';
-        }, delay + 400);
+        }, delay + 500);
       });
     });
   }
