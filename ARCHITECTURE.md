@@ -98,14 +98,16 @@ cid-aprueba/
 │   │   ├── requisitionController.js  # Upload, list, detail, download
 │   │   ├── approvalController.js  # Approve, reject, return
 │   │   ├── quotationController.js # Quotation CRUD and file management
-│   │   └── dashboardController.js # Metrics and summaries
+│   │   ├── dashboardController.js # Metrics and summaries
+│   │   └── userController.js      # User management (CRUD)
 │   │
 │   ├── routes/
 │   │   ├── auth.js
 │   │   ├── requisitions.js
 │   │   ├── approvals.js
 │   │   ├── quotations.js
-│   │   └── dashboard.js
+│   │   ├── dashboard.js
+│   │   └── users.js               # User management routes
 │   │
 │   └── utils/
 │       ├── AppError.js        # Custom error class
@@ -342,6 +344,16 @@ All endpoints return JSON. Protected routes require `Authorization: Bearer <toke
 | GET | `/api/dashboard/pending` | Yes | Requisitions awaiting current user action |
 | GET | `/api/dashboard/recent` | Yes | Recently processed requisitions |
 
+### User Management (Representante Legal only — role_level 3)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/users` | Yes (role 3) | List all users (including inactive) |
+| POST | `/api/users` | Yes (role 3) | Create a new user |
+| PUT | `/api/users/:id` | Yes (role 3) | Update user details (email, name, role, territory, gender) |
+| PUT | `/api/users/:id/password` | Yes (role 3) | Reset a user's password |
+| PUT | `/api/users/:id/toggle` | Yes (role 3) | Toggle user active/inactive status |
+
 ---
 
 ## 6. Authentication & Authorization Flow
@@ -390,9 +402,24 @@ sequenceDiagram
 | **Open requisition detail** | User role_level must be ≤ requisition current_approval_level |
 | **Approve/Reject** | User role_level must equal requisition current_approval_level |
 | **Upload requisition** | Coordinadores de Territorio (role_level = 1) only |
-| **Register users** | Admin only (dedicated admin flag) |
+| **Manage users** | Representante Legal (role_level = 3) only — see Section 7.1 |
 
 ---
+
+### User Management (role_level 3 — Representante Legal)
+
+Only users with `role_level === 3` (Representante Legal) can access user management features. Every endpoint in [`userController.js`](src/controllers/userController.js) checks `req.user.role_level !== 3` and throws a `403 FORBIDDEN` error if the condition is not met.
+
+| Capability | Details |
+|------------|---------|
+| **List users** | Retrieves all users including inactive ones (via [`User.findAllIncludingInactive()`](src/models/User.js)) |
+| **Create users** | Can create users of any role level (1–6) and any territory. Validates unique username and email. Password is hashed with `bcrypt` (salt rounds = 10) |
+| **Edit users** | Can update email, full name, role level, territory, gender, and active status. Cannot change username |
+| **Reset passwords** | Can reset any user's password (minimum 6 characters) |
+| **Activate/Deactivate** | Toggles `is_active` flag (0/1). Cannot deactivate own account (returns `400 SELF_DEACTIVATION`) |
+
+The frontend shows a **"Gestión de Usuarios"** tab in the navigation only when the logged-in user has `role_level === 3`.
+
 
 ## 7. Approval Workflow State Machine
 
@@ -506,7 +533,7 @@ The frontend is a set of static HTML pages served from `/public`. JavaScript mod
 
 | Page | Purpose |
 |------|---------|
-| `index.html` | Single-page app: login, dashboard, requisition list, detail, create, profile |
+| `index.html` | Single-page app: login, dashboard, requisition list, detail, create, profile, users (Gestión de Usuarios) |
 
 ### Brand Design Tokens
 

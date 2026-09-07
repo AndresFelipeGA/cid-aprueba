@@ -168,6 +168,15 @@ const App = (() => {
         createLink.classList.add('hidden');
       }
     }
+
+    const usersLink = $('#nav-users');
+    if (usersLink) {
+      if (currentUser && currentUser.role_level === 3) {
+        usersLink.classList.remove('hidden');
+      } else {
+        usersLink.classList.add('hidden');
+      }
+    }
   }
 
   // --- Router ---
@@ -188,6 +197,7 @@ const App = (() => {
       'requisition-detail': 'Detalle de la Requisición',
       'create-requisition': 'Crear Requisición',
       profile: 'Mi Perfil',
+      users: 'Gestión de Usuarios',
     };
     $('#header-title').textContent = titles[view] || '';
 
@@ -211,6 +221,9 @@ const App = (() => {
       break;
     case 'profile':
       renderProfile(main);
+      break;
+    case 'users':
+      renderUsers(main);
       break;
     default:
       renderDashboard(main);
@@ -1207,6 +1220,471 @@ const App = (() => {
     }
   }
 
+  // --- User Management View ---
+
+  /**
+   * Render the user management view with user list table.
+   * @param {HTMLElement} container - Main content container
+   */
+  async function renderUsers(container) {
+    // Guard: only role_level 3 can access
+    if (!currentUser || currentUser.role_level !== 3) {
+      container.innerHTML = `
+        <div class="alert alert--error">No tiene permisos para acceder a la gestión de usuarios.</div>
+      `;
+      setTimeout(() => navigate('dashboard'), 2000);
+      return;
+    }
+
+    showLoading(container);
+
+    try {
+      const result = await API.getUsers();
+      const users = result.data.users || [];
+
+      let html = `
+        <div class="main__header">
+          <h2 class="main__title">Gestión de Usuarios</h2>
+          <button class="btn btn--primary" data-action="show-create-user">+ Crear Usuario</button>
+        </div>
+
+        <!-- Create User Form (hidden by default) -->
+        <div class="user-form-panel hidden" id="create-user-panel">
+          <h3 class="user-form-panel__title">Crear Nuevo Usuario</h3>
+          <div id="create-user-feedback"></div>
+          <form id="create-user-form">
+            <div class="user-form-grid">
+              <div class="form__group">
+                <label class="form__label" for="create-username">Usuario</label>
+                <input class="form__input" type="text" id="create-username" required placeholder="usuario.nombre" pattern="[a-zA-Z0-9.]+">
+              </div>
+              <div class="form__group">
+                <label class="form__label" for="create-email">Email</label>
+                <input class="form__input" type="email" id="create-email" required placeholder="correo@ejemplo.com">
+              </div>
+              <div class="form__group">
+                <label class="form__label" for="create-password">Contraseña</label>
+                <input class="form__input" type="password" id="create-password" required minlength="6" placeholder="Mínimo 6 caracteres">
+              </div>
+              <div class="form__group">
+                <label class="form__label" for="create-fullname">Nombre Completo</label>
+                <input class="form__input" type="text" id="create-fullname" required placeholder="Nombre completo">
+              </div>
+              <div class="form__group">
+                <label class="form__label" for="create-role">Rol</label>
+                <select class="form__input" id="create-role" required>
+                  <option value="">Seleccione un rol</option>
+                  <option value="1">Coordinador/a de Territorio</option>
+                  <option value="2">Director/a Programática</option>
+                  <option value="3">Representante Legal</option>
+                  <option value="4">Encargado/a de Compras</option>
+                  <option value="5">Área Financiera</option>
+                  <option value="6">Área de Compras</option>
+                </select>
+              </div>
+              <div class="form__group">
+                <label class="form__label" for="create-territory">Territorio</label>
+                <input class="form__input" type="text" id="create-territory" placeholder="Opcional">
+              </div>
+              <div class="form__group">
+                <label class="form__label" for="create-gender">Género</label>
+                <select class="form__input" id="create-gender">
+                  <option value="">Prefiero no decir</option>
+                  <option value="M">Masculino</option>
+                  <option value="F">Femenino</option>
+                </select>
+              </div>
+            </div>
+            <div class="user-form-actions">
+              <button class="btn btn--primary" type="submit" id="create-user-btn">Crear Usuario</button>
+              <button class="btn btn--outline" type="button" data-action="cancel-create-user">Cancelar</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Edit User Form (hidden by default) -->
+        <div class="user-form-panel hidden" id="edit-user-panel">
+          <h3 class="user-form-panel__title">Editar Usuario</h3>
+          <div id="edit-user-feedback"></div>
+          <form id="edit-user-form">
+            <input type="hidden" id="edit-user-id">
+            <div class="user-form-grid">
+              <div class="form__group">
+                <label class="form__label" for="edit-username">Usuario</label>
+                <input class="form__input" type="text" id="edit-username" disabled>
+              </div>
+              <div class="form__group">
+                <label class="form__label" for="edit-email">Email</label>
+                <input class="form__input" type="email" id="edit-email" required placeholder="correo@ejemplo.com">
+              </div>
+              <div class="form__group">
+                <label class="form__label" for="edit-fullname">Nombre Completo</label>
+                <input class="form__input" type="text" id="edit-fullname" required minlength="2" placeholder="Nombre completo">
+              </div>
+              <div class="form__group">
+                <label class="form__label" for="edit-role">Rol</label>
+                <select class="form__input" id="edit-role" required>
+                  <option value="1">Coordinador/a de Territorio</option>
+                  <option value="2">Director/a Programática</option>
+                  <option value="3">Representante Legal</option>
+                  <option value="4">Encargado/a de Compras</option>
+                  <option value="5">Área Financiera</option>
+                  <option value="6">Área de Compras</option>
+                </select>
+              </div>
+              <div class="form__group">
+                <label class="form__label" for="edit-territory">Territorio</label>
+                <input class="form__input" type="text" id="edit-territory" placeholder="Opcional">
+              </div>
+              <div class="form__group">
+                <label class="form__label" for="edit-gender">Género</label>
+                <select class="form__input" id="edit-gender">
+                  <option value="">Prefiero no decir</option>
+                  <option value="M">Masculino</option>
+                  <option value="F">Femenino</option>
+                </select>
+              </div>
+            </div>
+            <div class="user-form-actions">
+              <button class="btn btn--primary" type="submit" id="edit-user-btn">Guardar Cambios</button>
+              <button class="btn btn--outline" type="button" data-action="cancel-edit-user">Cancelar</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Reset Password Form (hidden by default) -->
+        <div class="user-form-panel hidden" id="reset-password-panel">
+          <h3 class="user-form-panel__title">Restablecer Contraseña</h3>
+          <p class="user-form-panel__subtitle" id="reset-password-username"></p>
+          <div id="reset-password-feedback"></div>
+          <form id="reset-password-form">
+            <input type="hidden" id="reset-password-user-id">
+            <div class="form__group">
+              <label class="form__label" for="reset-password-input">Nueva Contraseña</label>
+              <input class="form__input" type="password" id="reset-password-input" required minlength="6" placeholder="Mínimo 6 caracteres">
+            </div>
+            <div class="user-form-actions">
+              <button class="btn btn--primary" type="submit" id="reset-password-btn">Restablecer</button>
+              <button class="btn btn--outline" type="button" data-action="cancel-reset-password">Cancelar</button>
+            </div>
+          </form>
+        </div>
+      `;
+
+      // User table
+      if (users.length === 0) {
+        html += `<div class="empty">No hay usuarios registrados</div>`;
+      } else {
+        html += `
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Usuario</th>
+                  <th>Email</th>
+                  <th>Rol</th>
+                  <th>Territorio</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+        `;
+
+        for (const user of users) {
+          const statusClass = user.is_active ? 'badge--user-active' : 'badge--user-inactive';
+          const statusText = user.is_active ? 'Activo' : 'Inactivo';
+
+          html += `
+            <tr>
+              <td>${escapeHtml(user.full_name)}</td>
+              <td>${escapeHtml(user.username)}</td>
+              <td>${escapeHtml(user.email || '—')}</td>
+              <td>${escapeHtml(roleName(user.role_level, user.gender))}</td>
+              <td>${escapeHtml(user.territory || '—')}</td>
+              <td><span class="badge ${statusClass}">${statusText}</span></td>
+              <td class="user-actions">
+                <button class="btn btn--outline btn--sm" data-action="edit-user" data-user='${escapeHtml(JSON.stringify(user))}' title="Editar">✏️</button>
+                <button class="btn btn--outline btn--sm" data-action="reset-user-password" data-user-id="${user.id}" data-username="${escapeHtml(user.username)}" title="Restablecer contraseña">🔑</button>
+                <button class="btn btn--sm ${user.is_active ? 'btn--danger' : 'btn--secondary'}" data-action="toggle-user-active" data-user-id="${user.id}" data-username="${escapeHtml(user.username)}" data-active="${user.is_active}" title="${user.is_active ? 'Desactivar' : 'Activar'}">${user.is_active ? '🚫' : '✅'}</button>
+              </td>
+            </tr>
+          `;
+        }
+
+        html += `
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+
+      // Attach form handlers
+      const createForm = $('#create-user-form');
+      if (createForm) {
+        createForm.addEventListener('submit', handleCreateUser);
+      }
+
+      const editForm = $('#edit-user-form');
+      if (editForm) {
+        editForm.addEventListener('submit', handleEditUser);
+      }
+
+      const resetForm = $('#reset-password-form');
+      if (resetForm) {
+        resetForm.addEventListener('submit', handleResetPassword);
+      }
+    } catch (err) {
+      showError(container, err.message || 'Error al cargar los usuarios');
+    }
+  }
+
+  /**
+   * Show the create user form panel.
+   */
+  function showCreateUserPanel() {
+    const panel = $('#create-user-panel');
+    const editPanel = $('#edit-user-panel');
+    const resetPanel = $('#reset-password-panel');
+    if (editPanel) editPanel.classList.add('hidden');
+    if (resetPanel) resetPanel.classList.add('hidden');
+    if (panel) {
+      panel.classList.remove('hidden');
+      const input = $('#create-username');
+      if (input) input.focus();
+    }
+  }
+
+  /**
+   * Hide the create user form panel and reset fields.
+   */
+  function hideCreateUserPanel() {
+    const panel = $('#create-user-panel');
+    if (panel) {
+      panel.classList.add('hidden');
+      const form = $('#create-user-form');
+      if (form) form.reset();
+      const feedback = $('#create-user-feedback');
+      if (feedback) feedback.innerHTML = '';
+    }
+  }
+
+  /**
+   * Show the edit user form panel pre-filled with user data.
+   * @param {Object} user - User data object
+   */
+  function showEditUserPanel(user) {
+    const panel = $('#edit-user-panel');
+    const createPanel = $('#create-user-panel');
+    const resetPanel = $('#reset-password-panel');
+    if (createPanel) createPanel.classList.add('hidden');
+    if (resetPanel) resetPanel.classList.add('hidden');
+    if (panel) {
+      panel.classList.remove('hidden');
+      $('#edit-user-id').value = user.id;
+      $('#edit-username').value = user.username;
+      $('#edit-email').value = user.email || '';
+      $('#edit-fullname').value = user.full_name || '';
+      $('#edit-role').value = user.role_level;
+      $('#edit-territory').value = user.territory || '';
+      $('#edit-gender').value = user.gender || '';
+      const feedback = $('#edit-user-feedback');
+      if (feedback) feedback.innerHTML = '';
+      panel.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+
+  /**
+   * Hide the edit user form panel.
+   */
+  function hideEditUserPanel() {
+    const panel = $('#edit-user-panel');
+    if (panel) {
+      panel.classList.add('hidden');
+      const feedback = $('#edit-user-feedback');
+      if (feedback) feedback.innerHTML = '';
+    }
+  }
+
+  /**
+   * Show the reset password form panel.
+   * @param {number} userId - User ID
+   * @param {string} username - Username for display
+   */
+  function showResetPasswordPanel(userId, username) {
+    const panel = $('#reset-password-panel');
+    const createPanel = $('#create-user-panel');
+    const editPanel = $('#edit-user-panel');
+    if (createPanel) createPanel.classList.add('hidden');
+    if (editPanel) editPanel.classList.add('hidden');
+    if (panel) {
+      panel.classList.remove('hidden');
+      $('#reset-password-user-id').value = userId;
+      $('#reset-password-username').textContent = `Usuario: ${username}`;
+      $('#reset-password-input').value = '';
+      const feedback = $('#reset-password-feedback');
+      if (feedback) feedback.innerHTML = '';
+      panel.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+
+  /**
+   * Hide the reset password form panel.
+   */
+  function hideResetPasswordPanel() {
+    const panel = $('#reset-password-panel');
+    if (panel) {
+      panel.classList.add('hidden');
+      const feedback = $('#reset-password-feedback');
+      if (feedback) feedback.innerHTML = '';
+    }
+  }
+
+  /**
+   * Handle create user form submission.
+   * @param {Event} e - Submit event
+   */
+  async function handleCreateUser(e) {
+    e.preventDefault();
+
+    const username = $('#create-username').value.trim();
+    const email = $('#create-email').value.trim();
+    const password = $('#create-password').value;
+    const fullName = $('#create-fullname').value.trim();
+    const roleLevel = parseInt($('#create-role').value);
+    const territory = $('#create-territory').value.trim();
+    const gender = $('#create-gender').value;
+    const btn = $('#create-user-btn');
+    const feedback = $('#create-user-feedback');
+
+    if (!username || !email || !password || !fullName || !roleLevel) {
+      feedback.innerHTML = '<div class="alert alert--error">Todos los campos obligatorios deben ser completados</div>';
+      return;
+    }
+
+    if (password.length < 6) {
+      feedback.innerHTML = '<div class="alert alert--error">La contraseña debe tener al menos 6 caracteres</div>';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Creando...';
+    feedback.innerHTML = '';
+
+    try {
+      await API.createUser({
+        username,
+        email,
+        password,
+        full_name: fullName,
+        role_level: roleLevel,
+        territory: territory || null,
+        gender: gender || null,
+      });
+
+      feedback.innerHTML = '<div class="alert alert--success">Usuario creado exitosamente</div>';
+      setTimeout(() => navigate('users'), 1000);
+    } catch (err) {
+      feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al crear el usuario')}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Crear Usuario';
+    }
+  }
+
+  /**
+   * Handle edit user form submission.
+   * @param {Event} e - Submit event
+   */
+  async function handleEditUser(e) {
+    e.preventDefault();
+
+    const userId = $('#edit-user-id').value;
+    const email = $('#edit-email').value.trim();
+    const fullName = $('#edit-fullname').value.trim();
+    const roleLevel = parseInt($('#edit-role').value);
+    const territory = $('#edit-territory').value.trim();
+    const gender = $('#edit-gender').value;
+    const btn = $('#edit-user-btn');
+    const feedback = $('#edit-user-feedback');
+
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+    feedback.innerHTML = '';
+
+    try {
+      await API.updateUser(userId, {
+        email,
+        full_name: fullName,
+        role_level: roleLevel,
+        territory: territory || null,
+        gender: gender || null,
+      });
+
+      feedback.innerHTML = '<div class="alert alert--success">Usuario actualizado exitosamente</div>';
+      setTimeout(() => navigate('users'), 1000);
+    } catch (err) {
+      feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al actualizar el usuario')}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Guardar Cambios';
+    }
+  }
+
+  /**
+   * Handle reset password form submission.
+   * @param {Event} e - Submit event
+   */
+  async function handleResetPassword(e) {
+    e.preventDefault();
+
+    const userId = $('#reset-password-user-id').value;
+    const password = $('#reset-password-input').value;
+    const btn = $('#reset-password-btn');
+    const feedback = $('#reset-password-feedback');
+
+    if (!password || password.length < 6) {
+      feedback.innerHTML = '<div class="alert alert--error">La contraseña debe tener al menos 6 caracteres</div>';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Restableciendo...';
+    feedback.innerHTML = '';
+
+    try {
+      await API.resetUserPassword(userId, password);
+      feedback.innerHTML = '<div class="alert alert--success">Contraseña restablecida exitosamente</div>';
+      setTimeout(() => hideResetPasswordPanel(), 1500);
+    } catch (err) {
+      feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al restablecer la contraseña')}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Restablecer';
+    }
+  }
+
+  /**
+   * Handle toggle user active status.
+   * @param {number} userId - User ID
+   * @param {string} username - Username for confirmation
+   * @param {boolean} isActive - Current active status
+   */
+  async function handleToggleUserActive(userId, username, isActive) {
+    const action = isActive ? 'desactivar' : 'activar';
+    if (!confirm(`¿Está seguro de ${action} al usuario "${username}"?`)) return;
+
+    try {
+      await API.toggleUserActive(userId);
+      navigate('users');
+    } catch (err) {
+      alert(err.message || `Error al ${action} el usuario`);
+    }
+  }
+
   // --- Profile View ---
 
   function renderProfile(container) {
@@ -1666,6 +2144,53 @@ const App = (() => {
         const docId = target.dataset.docId;
         const filename = target.dataset.filename;
         openDocumentModal(() => API.downloadQuotationDocument(reqId, quotationId, docId), filename);
+      }
+
+      // --- User Management actions ---
+
+      if (action === 'show-create-user') {
+        e.preventDefault();
+        showCreateUserPanel();
+      }
+
+      if (action === 'cancel-create-user') {
+        e.preventDefault();
+        hideCreateUserPanel();
+      }
+
+      if (action === 'cancel-edit-user') {
+        e.preventDefault();
+        hideEditUserPanel();
+      }
+
+      if (action === 'cancel-reset-password') {
+        e.preventDefault();
+        hideResetPasswordPanel();
+      }
+
+      if (action === 'edit-user') {
+        e.preventDefault();
+        try {
+          const userData = JSON.parse(target.dataset.user);
+          showEditUserPanel(userData);
+        } catch (_err) {
+          // ignore parse errors
+        }
+      }
+
+      if (action === 'reset-user-password') {
+        e.preventDefault();
+        const userId = target.dataset.userId;
+        const username = target.dataset.username;
+        showResetPasswordPanel(userId, username);
+      }
+
+      if (action === 'toggle-user-active') {
+        e.preventDefault();
+        const userId = target.dataset.userId;
+        const username = target.dataset.username;
+        const isActive = target.dataset.active === '1';
+        handleToggleUserActive(userId, username, isActive);
       }
     });
 

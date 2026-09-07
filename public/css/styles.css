@@ -1798,6 +1798,88 @@ textarea.form__input {
   }
 }
 
+/* --- User Management --- */
+.user-form-panel {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
+  padding: 24px 32px;
+  margin-bottom: 24px;
+}
+
+.user-form-panel__title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.user-form-panel__subtitle {
+  font-size: 0.875rem;
+  color: var(--color-text-light);
+  margin-bottom: 16px;
+}
+
+.user-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 20px;
+}
+
+.user-form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.user-actions {
+  white-space: nowrap;
+}
+
+.user-actions .btn {
+  margin-right: 4px;
+}
+
+.user-actions .btn:last-child {
+  margin-right: 0;
+}
+
+/* --- User Active/Inactive Badges --- */
+.badge--user-active {
+  background-color: rgba(107, 142, 35, 0.12);
+  color: var(--color-accent);
+}
+
+.badge--user-inactive {
+  background-color: rgba(178, 34, 34, 0.1);
+  color: var(--color-danger);
+}
+
+@media (max-width: 768px) {
+  .user-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .user-form-panel {
+    padding: 20px 16px;
+  }
+
+  .user-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .user-actions .btn {
+    margin-right: 0;
+  }
+}
+
 /* --- Overlay for mobile sidebar --- */
 .overlay {
   display: none;

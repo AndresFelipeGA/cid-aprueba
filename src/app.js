@@ -15,6 +15,7 @@ const requisitionRoutes = require('./routes/requisitions');
 const approvalRoutes = require('./routes/approvals');
 const dashboardRoutes = require('./routes/dashboard');
 const quotationRoutes = require('./routes/quotations');
+const userRoutes = require('./routes/users');
 
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
@@ -55,6 +56,7 @@ app.use('/api/requisitions', requisitionRoutes);
 app.use('/api/requisitions', quotationRoutes);
 app.use('/api/approvals', approvalRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/users', userRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

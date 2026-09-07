@@ -168,6 +168,54 @@ const API = (() => {
     return request('PUT', '/auth/profile', data);
   }
 
+  // --- User Management ---
+
+  /**
+   * Get all users (admin only).
+   * @returns {Promise<Object>} API response with users array
+   */
+  async function getUsers() {
+    return request('GET', '/users');
+  }
+
+  /**
+   * Create a new user (admin only).
+   * @param {Object} userData - User data
+   * @returns {Promise<Object>} API response with created user
+   */
+  async function createUser(userData) {
+    return request('POST', '/users', userData);
+  }
+
+  /**
+   * Update a user (admin only).
+   * @param {number} id - User ID
+   * @param {Object} userData - Fields to update
+   * @returns {Promise<Object>} API response with updated user
+   */
+  async function updateUser(id, userData) {
+    return request('PUT', `/users/${id}`, userData);
+  }
+
+  /**
+   * Reset a user's password (admin only).
+   * @param {number} id - User ID
+   * @param {string} password - New password
+   * @returns {Promise<Object>} API response
+   */
+  async function resetUserPassword(id, password) {
+    return request('PUT', `/users/${id}/password`, { password });
+  }
+
+  /**
+   * Toggle a user's active status (admin only).
+   * @param {number} id - User ID
+   * @returns {Promise<Object>} API response with updated user
+   */
+  async function toggleUserActive(id) {
+    return request('PUT', `/users/${id}/toggle`);
+  }
+
   // --- Public API ---
 
   return {
@@ -193,5 +241,10 @@ const API = (() => {
     getDashboardStats,
     getPending,
     getRecent,
+    getUsers,
+    createUser,
+    updateUser,
+    resetUserPassword,
+    toggleUserActive,
   };
 })();

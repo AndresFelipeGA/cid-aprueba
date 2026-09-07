@@ -170,6 +170,16 @@ const req = db.prepare(`SELECT * FROM requisitions WHERE id = ${id}`).get();
 | Token storage | `localStorage` on client (acceptable for internal tool) |
 | Password requirements | Minimum 8 characters |
 
+### Authorization — User Management
+
+User management (CRUD operations on user accounts) is restricted to **Representante Legal (role_level 3)** only. All endpoints in [`userController.js`](src/controllers/userController.js) enforce this by checking `req.user.role_level === 3` at the start of every handler. If the check fails, a `403 FORBIDDEN` error is returned.
+
+| Rule | Implementation |
+|------|---------------|
+| **Access control** | Every user management handler checks `req.user.role_level !== 3` and throws `AppError('Only Representante Legal can manage users', 403, 'FORBIDDEN')` |
+| **Self-deactivation prevention** | The toggle-active endpoint rejects attempts to deactivate the requesting user's own account (`400 SELF_DEACTIVATION`) |
+| **Duplicate prevention** | Create and update endpoints check for unique `username` and `email` before persisting (`409 USERNAME_TAKEN` / `409 EMAIL_TAKEN`) |
+
 ### CORS
 
 - In development: allow `localhost` origins

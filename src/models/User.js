@@ -25,6 +25,16 @@ const User = {
     ).all();
   },
 
+  /**
+   * Find all users including inactive ones (for admin management).
+   * @returns {Array} All user records without password_hash
+   */
+  findAllIncludingInactive() {
+    return db.prepare(
+      'SELECT id, username, email, full_name, role_level, territory, gender, is_active, created_at, updated_at FROM users ORDER BY role_level ASC, username ASC'
+    ).all();
+  },
+
   findByRoleLevel(roleLevel) {
     return db.prepare(
       'SELECT id, username, email, full_name, role_level, territory, gender, is_active, created_at, updated_at FROM users WHERE role_level = ? AND is_active = 1'
@@ -37,11 +47,11 @@ const User = {
     ).all(territory);
   },
 
-  create({ username, email, passwordHash, fullName, roleLevel, territory }) {
+  create({ username, email, passwordHash, fullName, roleLevel, territory, gender }) {
     const result = db.prepare(`
-      INSERT INTO users (username, email, password_hash, full_name, role_level, territory)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(username, email, passwordHash, fullName, roleLevel, territory || null);
+      INSERT INTO users (username, email, password_hash, full_name, role_level, territory, gender)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(username, email, passwordHash, fullName, roleLevel, territory || null, gender || null);
 
     return User.findById(result.lastInsertRowid);
   },
