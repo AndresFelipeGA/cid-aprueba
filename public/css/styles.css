@@ -217,9 +217,9 @@ img {
 
 .login__logo-img {
   display: block;
-  max-width: 269px;
+  max-width: 309px;
   height: auto;
-  margin: 0 auto 12px;
+  margin: 0 auto 14px;
 }
 
 .login__error {
@@ -299,9 +299,9 @@ textarea.form__input {
 
 .sidebar__logo-img {
   display: block;
-  max-width: 120px;
+  max-width: 168px;
   height: auto;
-  margin: 0 auto 4px;
+  margin: 0 auto 6px;
 }
 
 .sidebar__nav {
@@ -1221,7 +1221,7 @@ textarea.form__input {
   }
 
   .login__logo-img {
-    max-width: 209px;
+    max-width: 240px;
   }
 
   .modal__content {
