@@ -10,6 +10,7 @@ const App = (() => {
   let currentView = 'dashboard';
   let currentParams = {};
   let _lastUploadedFileInfo = null; // For auto-preview after upload
+  let _badgePollingInterval = null;
 
   // --- DOM References ---
   const $ = (sel) => document.querySelector(sel);
@@ -111,6 +112,73 @@ const App = (() => {
     return STEP_LABELS[stepLevel] || `Paso ${stepLevel}`;
   }
 
+  // --- Toast Notification System ---
+
+  const TOAST_ICONS = {
+    success: '✓',
+    error: '✗',
+    warning: '⚠',
+    info: 'ℹ',
+  };
+
+  /**
+   * Show a toast notification
+   * @param {string} message - The message to display
+   * @param {'success'|'error'|'warning'|'info'} type - Toast type
+   * @param {number} [duration=4000] - Auto-dismiss duration in ms
+   */
+  function showToast(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast--${type}`;
+    toast.setAttribute('role', 'alert');
+
+    toast.innerHTML = `
+      <span class="toast__icon">${TOAST_ICONS[type] || TOAST_ICONS.info}</span>
+      <span class="toast__message">${message}</span>
+      <button class="toast__close" aria-label="Cerrar">&times;</button>
+      <div class="toast__progress"></div>
+    `;
+
+    container.appendChild(toast);
+
+    // Auto-dismiss timer
+    const timer = setTimeout(() => dismissToast(toast), duration);
+
+    // Pause progress on hover
+    toast.addEventListener('mouseenter', () => {
+      const progress = toast.querySelector('.toast__progress');
+      if (progress) progress.style.animationPlayState = 'paused';
+      clearTimeout(timer);
+    });
+
+    toast.addEventListener('mouseleave', () => {
+      const progress = toast.querySelector('.toast__progress');
+      if (progress) progress.style.animationPlayState = 'running';
+      // Resume with remaining time approximation
+      setTimeout(() => dismissToast(toast), 2000);
+    });
+
+    // Close button
+    const closeBtn = toast.querySelector('.toast__close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        clearTimeout(timer);
+        dismissToast(toast);
+      });
+    }
+  }
+
+  function dismissToast(toast) {
+    if (!toast || toast.classList.contains('toast--dismissing')) return;
+    toast.classList.add('toast--dismissing');
+    toast.addEventListener('animationend', () => {
+      toast.remove();
+    });
+  }
+
   function roleNameForStep(stepLevel, gender) {
     const roleLevel = STEP_TO_ROLE[stepLevel];
     return roleName(roleLevel, gender);
@@ -155,6 +223,80 @@ const App = (() => {
   function getFileExtension(filename) {
     if (!filename) return '';
     return filename.split('.').pop().toLowerCase();
+  }
+
+  // --- Theme Toggle ---
+
+  function toggleTheme() {
+    const html = document.documentElement;
+    const current = html.getAttribute('data-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+
+    if (next === 'dark') {
+      html.setAttribute('data-theme', 'dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      html.removeAttribute('data-theme');
+      localStorage.setItem('theme', 'light');
+    }
+
+    updateThemeToggleUI();
+  }
+
+  function updateThemeToggleUI() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const icon = document.getElementById('theme-icon');
+    const label = document.getElementById('theme-label');
+    if (icon) icon.textContent = isDark ? '🌙' : '☀️';
+    if (label) label.textContent = isDark ? 'Oscuro' : 'Claro';
+  }
+
+  // --- Activity Badges ---
+
+  async function updateBadges() {
+    if (!currentUser || !API.getToken()) return;
+
+    try {
+      const result = await API.getPending(1, 100);
+      const pendingItems = result.data.items || [];
+      const count = pendingItems.length;
+
+      // Update requisitions badge
+      const reqBadge = document.getElementById('badge-requisitions');
+      if (reqBadge) {
+        if (count > 0) {
+          reqBadge.textContent = count > 99 ? '99+' : String(count);
+          reqBadge.classList.remove('sidebar__badge--hidden');
+        } else {
+          reqBadge.classList.add('sidebar__badge--hidden');
+        }
+      }
+
+      // Update dashboard badge (same count)
+      const dashBadge = document.getElementById('badge-dashboard');
+      if (dashBadge) {
+        if (count > 0) {
+          dashBadge.textContent = count > 99 ? '99+' : String(count);
+          dashBadge.classList.remove('sidebar__badge--hidden');
+        } else {
+          dashBadge.classList.add('sidebar__badge--hidden');
+        }
+      }
+    } catch (_err) {
+      // Silently fail — badges are non-critical
+    }
+  }
+
+  function startBadgePolling() {
+    stopBadgePolling();
+    _badgePollingInterval = setInterval(updateBadges, 60000);
+  }
+
+  function stopBadgePolling() {
+    if (_badgePollingInterval) {
+      clearInterval(_badgePollingInterval);
+      _badgePollingInterval = null;
+    }
   }
 
   // --- Sidebar Visibility ---
@@ -272,7 +414,14 @@ const App = (() => {
     // Show/hide sidebar links based on role
     updateSidebarVisibility();
 
+    // Update theme toggle UI
+    updateThemeToggleUI();
+
     navigate('dashboard');
+
+    // Update activity badges after login
+    updateBadges();
+    startBadgePolling();
 
     // Check if user has no email and show modal
     checkEmailRegistration();
@@ -370,7 +519,199 @@ const App = (() => {
   function handleLogout() {
     API.removeToken();
     currentUser = null;
+    stopBadgePolling();
     showLogin();
+  }
+
+  // --- Animated Counter ---
+
+  /**
+   * Animate a counter from 0 to targetValue with ease-out easing.
+   * @param {HTMLElement} element - The DOM element to update
+   * @param {number} targetValue - The final integer value
+   * @param {number} [duration=1500] - Animation duration in ms
+   */
+  function animateCounter(element, targetValue, duration = 1500) {
+    if (!element || targetValue === 0) {
+      if (element) element.textContent = '0';
+      return;
+    }
+    const startTime = performance.now();
+    function easeOut(t) {
+      return 1 - Math.pow(1 - t, 3);
+    }
+    function update(currentTime) {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easedProgress = easeOut(progress);
+      const currentValue = Math.round(easedProgress * targetValue);
+      element.textContent = currentValue;
+      if (progress < 1) {
+        requestAnimationFrame(update);
+      }
+    }
+    element.textContent = '0';
+    requestAnimationFrame(update);
+  }
+
+  // --- SVG Donut Chart ---
+
+  /**
+   * Build an SVG donut chart showing distribution by status.
+   * @param {Object} byStatus - { pending, in_review, approved, rejected }
+   * @returns {string} HTML string with SVG
+   */
+  function buildDonutChart(byStatus) {
+    const data = [
+      { key: 'pending', label: 'Pendiente', value: byStatus.pending || 0, color: '#C85A2A' },
+      { key: 'in_review', label: 'En revisión', value: byStatus.in_review || 0, color: '#6B8E23' },
+      { key: 'approved', label: 'Aprobado', value: byStatus.approved || 0, color: '#3D5A1E' },
+      { key: 'rejected', label: 'Rechazado', value: byStatus.rejected || 0, color: '#B22222' },
+    ];
+
+    const total = data.reduce((sum, d) => sum + d.value, 0);
+    const size = 200;
+    const cx = size / 2;
+    const cy = size / 2;
+    const radius = 70;
+    const strokeWidth = 28;
+    const circumference = 2 * Math.PI * radius;
+
+    let segments = '';
+    let offset = 0;
+
+    if (total === 0) {
+      // Empty state: show a gray ring
+      segments = `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="#E0D8CC" stroke-width="${strokeWidth}" />`;
+    } else {
+      for (let i = 0; i < data.length; i++) {
+        const d = data[i];
+        if (d.value === 0) continue;
+        const segmentLength = (d.value / total) * circumference;
+        const gapLength = circumference - segmentLength;
+        const animDelay = (i * 0.15).toFixed(2);
+        segments += `
+          <circle
+            cx="${cx}" cy="${cy}" r="${radius}"
+            fill="none"
+            stroke="${d.color}"
+            stroke-width="${strokeWidth}"
+            stroke-dasharray="${segmentLength} ${gapLength}"
+            stroke-dashoffset="${-offset}"
+            stroke-linecap="butt"
+            transform="rotate(-90 ${cx} ${cy})"
+            class="donut-segment"
+            style="animation-delay: ${animDelay}s"
+          />
+        `;
+        offset += segmentLength;
+      }
+    }
+
+    // Legend
+    let legend = '<div class="chart-legend">';
+    for (const d of data) {
+      legend += `
+        <div class="chart-legend__item">
+          <span class="chart-legend__dot" style="background-color: ${d.color}"></span>
+          <span class="chart-legend__label">${d.label}</span>
+          <span class="chart-legend__value">${d.value}</span>
+        </div>
+      `;
+    }
+    legend += '</div>';
+
+    return `
+      <div class="chart-donut">
+        <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" class="donut-svg">
+          ${segments}
+          <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" class="donut-center-text">
+            <tspan x="${cx}" dy="-6" class="donut-center-number">${total}</tspan>
+            <tspan x="${cx}" dy="18" class="donut-center-label">Total</tspan>
+          </text>
+        </svg>
+        ${legend}
+      </div>
+    `;
+  }
+
+  // --- SVG Horizontal Bar Chart ---
+
+  /**
+   * Build an SVG horizontal bar chart showing requisitions per step.
+   * @param {Object} byStep - { "1": count, "2": count, ... "7": count }
+   * @returns {string} HTML string with SVG
+   */
+  function buildBarChart(byStep) {
+    const barHeight = 28;
+    const barGap = 10;
+    const labelWidth = 80;
+    const countWidth = 40;
+    const chartWidth = 360;
+    const barAreaWidth = chartWidth - labelWidth - countWidth;
+    const totalHeight = 7 * (barHeight + barGap) - barGap + 10;
+
+    const maxCount = Math.max(1, ...Object.values(byStep));
+
+    let bars = '';
+    for (let step = 1; step <= 7; step++) {
+      const count = byStep[String(step)] || 0;
+      const barWidth = Math.max(count > 0 ? 4 : 0, (count / maxCount) * barAreaWidth);
+      const y = (step - 1) * (barHeight + barGap);
+      const animDelay = ((step - 1) * 0.08).toFixed(2);
+
+      // Gradient stop position based on step
+      const gradientPercent = ((step - 1) / 6) * 100;
+
+      bars += `
+        <g class="bar-group" style="animation-delay: ${animDelay}s">
+          <text x="${labelWidth - 8}" y="${y + barHeight / 2 + 1}" text-anchor="end" dominant-baseline="central" class="bar-label">Paso ${step}</text>
+          <rect x="${labelWidth}" y="${y + 2}" width="0" height="${barHeight - 4}" rx="4" ry="4"
+                fill="url(#barGradient)" class="bar-rect" data-target-width="${barWidth}" />
+          <text x="${labelWidth + barWidth + 8}" y="${y + barHeight / 2 + 1}" dominant-baseline="central" class="bar-count" data-target-x="${labelWidth + barWidth + 8}">${count}</text>
+        </g>
+      `;
+    }
+
+    return `
+      <div class="chart-bars">
+        <svg width="100%" viewBox="0 0 ${chartWidth} ${totalHeight}" preserveAspectRatio="xMinYMin meet" class="bars-svg">
+          <defs>
+            <linearGradient id="barGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#C85A2A" />
+              <stop offset="100%" stop-color="#6B8E23" />
+            </linearGradient>
+          </defs>
+          ${bars}
+        </svg>
+      </div>
+    `;
+  }
+
+  /**
+   * Animate bar chart bars after DOM insertion.
+   */
+  function animateBarChart() {
+    const bars = document.querySelectorAll('.bar-rect');
+    const counts = document.querySelectorAll('.bar-count');
+    requestAnimationFrame(() => {
+      bars.forEach((bar, i) => {
+        const targetWidth = parseFloat(bar.getAttribute('data-target-width')) || 0;
+        const delay = i * 80;
+        setTimeout(() => {
+          bar.style.transition = 'width 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+          bar.setAttribute('width', targetWidth);
+        }, delay);
+      });
+      counts.forEach((countEl, i) => {
+        const targetX = parseFloat(countEl.getAttribute('data-target-x')) || 0;
+        const delay = i * 80;
+        setTimeout(() => {
+          countEl.style.transition = 'opacity 0.3s ease';
+          countEl.style.opacity = '1';
+        }, delay + 400);
+      });
+    });
   }
 
   // --- Dashboard View ---
@@ -385,26 +726,44 @@ const App = (() => {
       ]);
 
       const stats = statsResult.data.summary;
+      const byStatus = statsResult.data.by_status || { pending: 0, in_review: 0, approved: 0, rejected: 0 };
+      const byStep = statsResult.data.by_step || {};
       const recentActivity = statsResult.data.recent_activity || [];
       const pendingRequisitions = pendingResult.data.items || [];
+
+      const pendingTotal = (stats.pending || 0) + (stats.in_review || 0);
 
       let html = `
         <div class="stats">
           <div class="stat-card stat-card--total">
             <div class="stat-card__label">Total Requisiciones</div>
-            <div class="stat-card__value">${stats.total}</div>
+            <div class="stat-card__value stat-counter" data-target="${stats.total}">0</div>
           </div>
           <div class="stat-card stat-card--pending">
             <div class="stat-card__label">Pendientes</div>
-            <div class="stat-card__value">${(stats.pending || 0) + (stats.in_review || 0)}</div>
+            <div class="stat-card__value stat-counter" data-target="${pendingTotal}">0</div>
           </div>
           <div class="stat-card stat-card--approved">
             <div class="stat-card__label">Aprobados</div>
-            <div class="stat-card__value">${stats.approved || 0}</div>
+            <div class="stat-card__value stat-counter" data-target="${stats.approved || 0}">0</div>
           </div>
           <div class="stat-card stat-card--rejected">
             <div class="stat-card__label">Rechazados</div>
-            <div class="stat-card__value">${stats.rejected || 0}</div>
+            <div class="stat-card__value stat-counter" data-target="${stats.rejected || 0}">0</div>
+          </div>
+        </div>
+      `;
+
+      // Charts row
+      html += `
+        <div class="dashboard-charts">
+          <div class="chart-card">
+            <h3 class="chart-card__title">Distribución por Estado</h3>
+            ${buildDonutChart(byStatus)}
+          </div>
+          <div class="chart-card">
+            <h3 class="chart-card__title">Requisiciones por Etapa</h3>
+            ${buildBarChart(byStep)}
           </div>
         </div>
       `;
@@ -456,6 +815,18 @@ const App = (() => {
       html += `</div>`;
 
       container.innerHTML = html;
+
+      // Animate stat counters after DOM insertion
+      requestAnimationFrame(() => {
+        const counters = container.querySelectorAll('.stat-counter');
+        counters.forEach((el) => {
+          const target = parseInt(el.getAttribute('data-target'), 10) || 0;
+          animateCounter(el, target, 1500);
+        });
+
+        // Animate bar chart
+        animateBarChart();
+      });
     } catch (err) {
       showError(container, err.message || 'Error al cargar el panel de control');
     }
@@ -574,7 +945,7 @@ const App = (() => {
               <th>Título</th>
               <th>Proyecto</th>
               <th>Estado</th>
-              <th>Nivel</th>
+              <th>Progreso</th>
               <th>Subido por</th>
               <th>Fecha</th>
             </tr>
@@ -583,12 +954,13 @@ const App = (() => {
     `;
 
     for (const requisition of requisitions) {
+      const progressHtml = buildProgressBar(requisition);
       html += `
         <tr class="table__row--clickable" data-action="view-requisition" data-id="${requisition.id}">
           <td>${escapeHtml(requisition.title)}</td>
           <td>${requisition.project_name ? escapeHtml(requisition.project_name) : '<span style="color:var(--color-text-light)">—</span>'}</td>
           <td>${statusBadge(requisition.status)}</td>
-          <td>${stepLabel(requisition.current_approval_level)}</td>
+          <td>${progressHtml}</td>
           <td>${escapeHtml(requisition.uploader_name)}</td>
           <td>${formatDateShort(requisition.created_at)}</td>
         </tr>
@@ -602,6 +974,56 @@ const App = (() => {
     `;
 
     tableContainer.innerHTML = html;
+
+    // Animate progress bars after render
+    requestAnimationFrame(() => {
+      tableContainer.querySelectorAll('.req-progress__fill').forEach(fill => {
+        const target = fill.getAttribute('data-width');
+        if (target) fill.style.width = target;
+      });
+    });
+  }
+
+  /**
+   * Build progress bar HTML for a requisition
+   * @param {Object} req - Requisition object with status and current_approval_level
+   * @returns {string} HTML string
+   */
+  function buildProgressBar(req) {
+    const totalSteps = 7;
+    let percent = 0;
+    let fillClass = '';
+    let labelClass = '';
+    let labelText = '';
+
+    if (req.status === 'approved') {
+      percent = 100;
+      fillClass = 'req-progress__fill--approved';
+      labelClass = 'req-progress__label--approved';
+      labelText = 'Aprobado';
+    } else if (req.status === 'rejected') {
+      const level = req.current_approval_level || 1;
+      percent = ((level - 1) / totalSteps) * 100;
+      // Show at least a sliver for rejected at step 1
+      if (percent < 5) percent = 5;
+      fillClass = 'req-progress__fill--rejected';
+      labelClass = 'req-progress__label--rejected';
+      labelText = `Rechazado — Paso ${level} de ${totalSteps}`;
+    } else {
+      // pending or in_review
+      const level = req.current_approval_level || 1;
+      percent = ((level - 1) / totalSteps) * 100;
+      labelText = `Paso ${level} de ${totalSteps}`;
+    }
+
+    return `
+      <div class="req-progress">
+        <div class="req-progress__bar">
+          <div class="req-progress__fill ${fillClass}" data-width="${percent}%"></div>
+        </div>
+        <span class="req-progress__label ${labelClass}">${labelText}</span>
+      </div>
+    `;
   }
 
   // --- Quotation Panel Constants ---
@@ -1977,7 +2399,7 @@ const App = (() => {
       await API.toggleUserActive(userId);
       navigate('users');
     } catch (err) {
-      alert(err.message || `Error al ${action} el usuario`);
+      showToast(err.message || `Error al ${action} el usuario`, 'error');
     }
   }
 
@@ -2112,6 +2534,7 @@ const App = (() => {
     try {
       const result = await API.approveRequisition(requisitionId, comments, selectedQuotationId);
       feedback.innerHTML = `<div class="alert alert--success">${escapeHtml(result.message || 'Requisición aprobada')}</div>`;
+      updateBadges();
       setTimeout(() => navigate('requisition-detail', { id: requisitionId }), 1000);
     } catch (err) {
       feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al aprobar')}</div>`;
@@ -2138,6 +2561,7 @@ const App = (() => {
     try {
       const result = await API.rejectRequisition(requisitionId, comments);
       feedback.innerHTML = `<div class="alert alert--success">${escapeHtml(result.message || 'Requisición rechazada')}</div>`;
+      updateBadges();
       setTimeout(() => navigate('requisition-detail', { id: requisitionId }), 1000);
     } catch (err) {
       feedback.innerHTML = `<div class="alert alert--error">${escapeHtml(err.message || 'Error al rechazar')}</div>`;
@@ -2223,7 +2647,7 @@ const App = (() => {
       await API.deleteQuotation(requisitionId, quotationId);
       navigate('requisition-detail', { id: requisitionId });
     } catch (err) {
-      alert(err.message || 'Error al eliminar la cotización');
+      showToast(err.message || 'Error al eliminar la cotización', 'error');
     }
   }
 
@@ -2246,7 +2670,7 @@ const App = (() => {
       }
       navigate('requisition-detail', { id: requisitionId });
     } catch (err) {
-      alert(err.message || 'Error al adjuntar el documento');
+      showToast(err.message || 'Error al adjuntar el documento', 'error');
     }
   }
 
@@ -2257,7 +2681,7 @@ const App = (() => {
       await API.deleteQuotationDocument(requisitionId, quotationId, docId);
       navigate('requisition-detail', { id: requisitionId });
     } catch (err) {
-      alert(err.message || 'Error al eliminar el documento');
+      showToast(err.message || 'Error al eliminar el documento', 'error');
     }
   }
 
@@ -2288,6 +2712,21 @@ const App = (() => {
 
     // Mobile toggle
     $('#mobile-toggle').addEventListener('click', toggleMobileSidebar);
+
+    // Theme toggle
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+      themeToggle.addEventListener('click', toggleTheme);
+      themeToggle.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggleTheme();
+        }
+      });
+    }
+
+    // Initialize theme toggle UI on load
+    updateThemeToggleUI();
 
     // Overlay click closes sidebar
     $('.overlay').addEventListener('click', closeMobileSidebar);
@@ -2559,5 +2998,8 @@ const App = (() => {
   return {
     navigate,
     init,
+    showToast,
+    toggleTheme,
+    updateBadges,
   };
 })();

@@ -4,9 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CID Aprueba</title>
-  <link rel="stylesheet" href="css/styles.css?v=18">
+  <script>
+    // Apply saved theme BEFORE CSS loads to prevent flash of wrong theme
+    (function() {
+      var theme = localStorage.getItem('theme');
+      if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="css/styles.css?v=21">
 </head>
 <body>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="false"></div>
 
   <!-- ========== Login View ========== -->
   <div id="login-view" class="login hidden">
@@ -40,12 +52,21 @@
       <div class="sidebar__brand">
         <img src="assets/logo-LA-CID.svg" alt="CID - Corporación Infancia y Desarrollo" class="sidebar__logo-img">
       </div>
+      <div class="theme-toggle" id="theme-toggle" role="button" tabindex="0" aria-label="Cambiar tema">
+        <span class="theme-toggle__icon" id="theme-icon">☀️</span>
+        <div class="theme-toggle__track">
+          <div class="theme-toggle__thumb"></div>
+        </div>
+        <span class="theme-toggle__label" id="theme-label">Claro</span>
+      </div>
       <nav class="sidebar__nav">
         <a href="#" class="sidebar__link sidebar__link--active" data-action="navigate" data-view="dashboard">
           Panel de Control
+          <span class="sidebar__badge sidebar__badge--hidden" id="badge-dashboard"></span>
         </a>
         <a href="#" class="sidebar__link" data-action="navigate" data-view="requisitions">
           Requisiciones
+          <span class="sidebar__badge sidebar__badge--hidden" id="badge-requisitions"></span>
         </a>
         <a href="#" class="sidebar__link" id="nav-create-requisition" data-action="navigate" data-view="create-requisition">
           Crear Requisición
@@ -176,8 +197,8 @@
   </div>
 
   <!-- Scripts -->
-  <script src="js/api.js?v=18"></script>
-  <script src="js/app.js?v=18"></script>
+  <script src="js/api.js?v=21"></script>
+  <script src="js/app.js?v=21"></script>
 
 </body>
 </html>
