@@ -1987,3 +1987,20 @@ textarea.form__input {
     min-width: 0;
   }
 }
+
+/* --- Checkbox Label (e.g., "Fecha no definida aún") --- */
+.form__checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--color-text-light);
+  margin-top: 6px;
+  cursor: pointer;
+}
+
+.form__checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}

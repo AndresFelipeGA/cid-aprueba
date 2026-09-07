@@ -1364,6 +1364,14 @@ const App = (() => {
       if (form) form.reset();
       const feedback = $('#project-modal-feedback');
       if (feedback) feedback.innerHTML = '';
+      // Reset checkbox to checked (default) and disable end date
+      const endDateUnknown = $('#project-end-date-unknown');
+      const endDateInput = $('#project-modal-end-date');
+      if (endDateUnknown) endDateUnknown.checked = true;
+      if (endDateInput) {
+        endDateInput.disabled = true;
+        endDateInput.value = '';
+      }
     }
   }
 
@@ -1379,7 +1387,8 @@ const App = (() => {
     const location = $('#project-modal-location').value.trim();
     const description = $('#project-modal-description').value.trim();
     const startDate = $('#project-modal-start-date').value;
-    const endDate = $('#project-modal-end-date').value;
+    const endDateUnknown = $('#project-end-date-unknown');
+    const endDate = (endDateUnknown && endDateUnknown.checked) ? '' : $('#project-modal-end-date').value;
     const btn = $('#project-modal-save');
     const feedback = $('#project-modal-feedback');
 
@@ -2313,6 +2322,23 @@ const App = (() => {
     const projectBackdrop = document.querySelector('#project-modal .modal__backdrop');
     if (projectBackdrop) {
       projectBackdrop.addEventListener('click', hideCreateProjectModal);
+    }
+
+    // Project end date unknown checkbox
+    const endDateUnknownCb = $('#project-end-date-unknown');
+    if (endDateUnknownCb) {
+      endDateUnknownCb.addEventListener('change', () => {
+        const endDateInput = $('#project-modal-end-date');
+        if (endDateInput) {
+          if (endDateUnknownCb.checked) {
+            endDateInput.disabled = true;
+            endDateInput.value = '';
+          } else {
+            endDateInput.disabled = false;
+            endDateInput.focus();
+          }
+        }
+      });
     }
 
     // Document preview modal

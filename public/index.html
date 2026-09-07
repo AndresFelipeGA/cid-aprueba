@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CID Aprueba</title>
-  <link rel="stylesheet" href="css/styles.css?v=17">
+  <link rel="stylesheet" href="css/styles.css?v=18">
 </head>
 <body>
 
@@ -143,7 +143,11 @@
           </div>
           <div class="form__group">
             <label class="form__label" for="project-modal-end-date">Fecha de Fin</label>
-            <input class="form__input" type="date" id="project-modal-end-date">
+            <input class="form__input" type="date" id="project-modal-end-date" disabled>
+            <label class="form__checkbox-label">
+              <input type="checkbox" id="project-end-date-unknown" checked>
+              Fecha no definida aún
+            </label>
           </div>
         </div>
         <div class="modal__actions">
@@ -172,8 +176,8 @@
   </div>
 
   <!-- Scripts -->
-  <script src="js/api.js?v=17"></script>
-  <script src="js/app.js?v=17"></script>
+  <script src="js/api.js?v=18"></script>
+  <script src="js/app.js?v=18"></script>
 
 </body>
 </html>
