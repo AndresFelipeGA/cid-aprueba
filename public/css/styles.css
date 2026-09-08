@@ -2290,6 +2290,7 @@ textarea.form__input {
   display: flex;
   gap: 20px;
   margin-bottom: 32px;
+  align-items: stretch;
 }
 
 .chart-card {
@@ -2298,16 +2299,18 @@ textarea.form__input {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--color-border);
-  padding: 24px;
+  padding: 20px;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .chart-card__title {
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-text);
-  margin-bottom: 20px;
-  padding-bottom: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -2316,7 +2319,9 @@ textarea.form__input {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
+  flex: 1;
+  justify-content: center;
 }
 
 .donut-svg {
@@ -2388,52 +2393,71 @@ textarea.form__input {
   color: var(--color-text);
 }
 
-/* --- Bar Chart --- */
+/* --- Bar Chart (Minimalist) --- */
 .chart-bars {
-  width: 100%;
-  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  justify-content: center;
 }
 
-.bars-svg {
-  display: block;
-  width: 100%;
-  height: auto;
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+}
+
+.bar-row--zero .bar-fill {
+  display: none;
 }
 
 .bar-label {
-  font-size: 11px;
-  fill: var(--color-text-light);
+  font-size: 12px;
+  color: var(--color-text-light);
   font-weight: 500;
+  width: 48px;
+  flex-shrink: 0;
+  text-align: right;
+  letter-spacing: 0.01em;
 }
 
 .bar-track {
-  transition: opacity 0.3s ease;
+  flex: 1;
+  height: 5px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 3px;
+  overflow: hidden;
 }
 
-.bar-rect {
-  transition: width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
-  filter: url(#barShadow);
-  cursor: pointer;
+.bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+  width: 0%;
+  transition: width 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  min-width: 0;
 }
 
-.bar-rect:hover {
-  filter: url(#barShadow) brightness(1.15);
-  transform: scaleY(1.06);
-  transform-origin: center;
-}
-
-.bar-glass {
-  pointer-events: none;
-  transition: width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+.bar-row:not(.bar-row--zero) .bar-fill {
+  min-width: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .bar-count {
   font-size: 12px;
-  fill: var(--color-text);
-  font-weight: 800;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  letter-spacing: 0.3px;
+  color: var(--color-text);
+  font-weight: 600;
+  width: 28px;
+  flex-shrink: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-count--zero {
+  color: var(--color-text-light);
+  font-weight: 400;
 }
 
 /* --- Charts Responsive --- */
@@ -2443,7 +2467,7 @@ textarea.form__input {
   }
 
   .chart-card {
-    padding: 20px 16px;
+    padding: 16px 14px;
   }
 }
 
@@ -2697,7 +2721,11 @@ body,
 
 /* --- Dark Mode: Bar Chart Track --- */
 [data-theme="dark"] .bar-track {
-  fill: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .bar-fill {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 /* --- Dark Mode: Badges --- */
@@ -2745,11 +2773,15 @@ body,
 
 /* --- Dark Mode: Bar Chart Labels --- */
 [data-theme="dark"] .bar-label {
-  fill: var(--color-text-light);
+  color: var(--color-text-light);
 }
 
 [data-theme="dark"] .bar-count {
-  fill: var(--color-text);
+  color: var(--color-text);
+}
+
+[data-theme="dark"] .bar-count--zero {
+  color: var(--color-text-light);
 }
 
 /* --- Dark Mode: Overlay --- */

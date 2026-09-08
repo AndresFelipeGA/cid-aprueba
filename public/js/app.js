@@ -638,96 +638,46 @@ const App = (() => {
   // --- SVG Horizontal Bar Chart ---
 
   /**
-   * Build an SVG horizontal bar chart showing requisitions per step.
+   * Build a minimalist horizontal bar chart showing requisitions per step.
+   * Uses pure HTML/CSS for thin, elegant bars.
    * @param {Object} byStep - { "1": count, "2": count, ... "7": count }
-   * @returns {string} HTML string with SVG
+   * @returns {string} HTML string
    */
   function buildBarChart(byStep) {
-    const barHeight = 30;
-    const barGap = 14;
-    const labelWidth = 80;
-    const countWidth = 44;
-    const chartWidth = 360;
-    const barAreaWidth = chartWidth - labelWidth - countWidth;
-    const totalHeight = 7 * (barHeight + barGap) - barGap + 10;
-    const barInnerHeight = barHeight - 6;
-    const cornerRadius = 6;
-
     const maxCount = Math.max(1, ...Object.values(byStep));
 
-    let bars = '';
+    let rows = '';
     for (let step = 1; step <= 7; step++) {
       const count = byStep[String(step)] || 0;
-      const barWidth = Math.max(count > 0 ? 6 : 0, (count / maxCount) * barAreaWidth);
-      const y = (step - 1) * (barHeight + barGap);
-      const barY = y + 3;
+      const pct = (count / maxCount) * 100;
+      const isZero = count === 0;
 
-      bars += `
-        <g class="bar-group">
-          <text x="${labelWidth - 8}" y="${y + barHeight / 2 + 1}" text-anchor="end" dominant-baseline="central" class="bar-label">Paso ${step}</text>
-          <rect x="${labelWidth}" y="${barY}" width="${barAreaWidth}" height="${barInnerHeight}" rx="${cornerRadius}" ry="${cornerRadius}"
-                class="bar-track" fill="rgba(0,0,0,0.04)" />
-          <rect x="${labelWidth}" y="${barY}" width="0" height="${barInnerHeight}" rx="${cornerRadius}" ry="${cornerRadius}"
-                fill="url(#barGradient)" class="bar-rect" data-target-width="${barWidth}" />
-          <rect x="${labelWidth}" y="${barY}" width="0" height="${Math.round(barInnerHeight / 2)}" rx="${cornerRadius}" ry="${cornerRadius}"
-                fill="url(#barGlassOverlay)" class="bar-glass" data-target-width="${barWidth}" />
-          <text x="${labelWidth + barWidth + 10}" y="${y + barHeight / 2 + 1}" dominant-baseline="central" class="bar-count" data-target-x="${labelWidth + barWidth + 10}">${count}</text>
-        </g>
+      rows += `
+        <div class="bar-row${isZero ? ' bar-row--zero' : ''}">
+          <span class="bar-label">Paso ${step}</span>
+          <div class="bar-track">
+            <div class="bar-fill" data-target-pct="${pct}" style="width: 0%"></div>
+          </div>
+          <span class="bar-count${isZero ? ' bar-count--zero' : ''}">${count}</span>
+        </div>
       `;
     }
 
-    return `
-      <div class="chart-bars">
-        <svg width="100%" viewBox="0 0 ${chartWidth} ${totalHeight}" preserveAspectRatio="xMinYMin meet" class="bars-svg">
-          <defs>
-            <linearGradient id="barGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="#C85A2A" />
-              <stop offset="100%" stop-color="#6B8E23" />
-            </linearGradient>
-            <linearGradient id="barGlassOverlay" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stop-color="rgba(255,255,255,0.28)" />
-              <stop offset="100%" stop-color="rgba(255,255,255,0)" />
-            </linearGradient>
-            <filter id="barShadow" x="-4%" y="-20%" width="108%" height="160%">
-              <feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="rgba(0,0,0,0.18)" />
-            </filter>
-          </defs>
-          ${bars}
-        </svg>
-      </div>
-    `;
+    return `<div class="chart-bars">${rows}</div>`;
   }
 
   /**
    * Animate bar chart bars after DOM insertion.
    */
   function animateBarChart() {
-    const bars = document.querySelectorAll('.bar-rect');
-    const glassOverlays = document.querySelectorAll('.bar-glass');
-    const counts = document.querySelectorAll('.bar-count');
+    const fills = document.querySelectorAll('.bar-fill');
     requestAnimationFrame(() => {
-      bars.forEach((bar, i) => {
-        const targetWidth = parseFloat(bar.getAttribute('data-target-width')) || 0;
-        const delay = i * 100;
+      fills.forEach((fill, i) => {
+        const targetPct = parseFloat(fill.getAttribute('data-target-pct')) || 0;
+        const delay = i * 60;
         setTimeout(() => {
-          bar.style.transition = 'width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1)';
-          bar.setAttribute('width', targetWidth);
+          fill.style.width = targetPct + '%';
         }, delay);
-      });
-      glassOverlays.forEach((glass, i) => {
-        const targetWidth = parseFloat(glass.getAttribute('data-target-width')) || 0;
-        const delay = i * 100;
-        setTimeout(() => {
-          glass.style.transition = 'width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1)';
-          glass.setAttribute('width', targetWidth);
-        }, delay);
-      });
-      counts.forEach((countEl, i) => {
-        const delay = i * 100;
-        setTimeout(() => {
-          countEl.style.transition = 'opacity 0.4s ease';
-          countEl.style.opacity = '1';
-        }, delay + 500);
       });
     });
   }
