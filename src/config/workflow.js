@@ -20,8 +20,11 @@ const STEP_TO_ROLE_MAP = Object.freeze({
 
 const MAX_STEP_LEVEL = 7;
 
+/** Step 1 is completed by the coordinator's upload itself; approvals start at step 2. */
+const FIRST_APPROVAL_LEVEL = 2;
+
 const STEP_LABELS = Object.freeze({
-  1: 'Aprobación Territorial',
+  1: 'Radicación de la Requisición',
   2: 'Aprobación Programática',
   3: 'Aprobación Legal',
   4: 'Gestión de Cotizaciones',
@@ -43,7 +46,29 @@ const ROLE_NAMES = Object.freeze({
 /** Role that administers users and projects alongside the coordinator. */
 const ADMIN_ROLE = 3;
 
-const REQUISITION_STATUSES = Object.freeze(['pending', 'in_review', 'approved', 'rejected']);
+const REQUISITION_STATUSES = Object.freeze(['pending', 'in_review', 'approved', 'rejected', 'returned']);
+
+const STATUS_LABELS = Object.freeze({
+  pending: 'Pendiente',
+  in_review: 'En revisión',
+  approved: 'Aprobada',
+  rejected: 'Rechazada',
+  returned: 'Devuelta',
+});
+
+/** Audit log actions. */
+const LOG_ACTIONS = Object.freeze({
+  uploaded: 'Radicó',
+  approved: 'Aprobó',
+  rejected: 'Rechazó definitivamente',
+  returned: 'Devolvió',
+  resubmitted: 'Radicó nueva versión',
+});
+
+/** Where a reviewer can send a requisition back to. */
+const RETURN_TARGETS = Object.freeze(['previous', 'start']);
+
+const CURRENCY = 'COP';
 
 const QUOTATION_DOC_TYPES = Object.freeze({
   rut: 'RUT',
@@ -57,10 +82,15 @@ const ALLOWED_UPLOAD_EXTENSIONS = Object.freeze(['.pdf', '.doc', '.docx', '.xls'
 module.exports = {
   STEP_TO_ROLE_MAP,
   MAX_STEP_LEVEL,
+  FIRST_APPROVAL_LEVEL,
   STEP_LABELS,
   ROLE_NAMES,
   ADMIN_ROLE,
   REQUISITION_STATUSES,
+  STATUS_LABELS,
+  LOG_ACTIONS,
+  RETURN_TARGETS,
+  CURRENCY,
   QUOTATION_DOC_TYPES,
   ALLOWED_UPLOAD_EXTENSIONS,
 };

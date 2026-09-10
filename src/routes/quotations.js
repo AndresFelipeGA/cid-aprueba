@@ -36,6 +36,8 @@ router.post(
     idParam('requisitionId'),
     body('provider_name').trim().isLength({ min: 2, max: 255 })
       .withMessage('El nombre del proveedor debe tener entre 2 y 255 caracteres'),
+    body('amount').isFloat({ min: 1 }).withMessage('El monto de la cotización es requerido y debe ser mayor a cero').toFloat(),
+    body('notes').optional({ values: 'falsy' }).trim().isLength({ max: 500 }).withMessage('Las notas deben tener máximo 500 caracteres'),
   ],
   validate,
   requireQuotationStage,

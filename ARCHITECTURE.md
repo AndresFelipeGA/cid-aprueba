@@ -12,25 +12,23 @@
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Uploaded: User submits requisition
-    Uploaded --> Step1_Review: Awaiting Step 1
-    Step1_Review --> Step2_Review: Step 1 approves
-    Step1_Review --> Rejected: Step 1 rejects
+    [*] --> Step2_Review: Coordinator radica (upload = step 1, number REQ-YYYY-NNNN, version 1)
     Step2_Review --> Step3_Review: Step 2 approves
-    Step2_Review --> Rejected: Step 2 rejects
     Step3_Review --> Step4_Review: Step 3 approves
-    Step3_Review --> Rejected: Step 3 rejects
-    Step4_Review --> Step5_Review: Step 4 approves (quotations attached)
-    Step4_Review --> Rejected: Step 4 rejects
+    Step4_Review --> Step5_Review: Step 4 approves (priced quotations attached)
     Step5_Review --> Step6_Review: Step 5 approves (quotation selected)
-    Step5_Review --> Rejected: Step 5 rejects
     Step6_Review --> Step7_Review: Step 6 approves
-    Step6_Review --> Rejected: Step 6 rejects
     Step7_Review --> Approved: Step 7 approves
-    Step7_Review --> Rejected: Step 7 rejects
+    Step2_Review --> Returned_N: any step N≥2 returns "previous" (status returned, level N-1)
+    Returned_N --> Step2_Review: approver at N-1 re-approves
+    Step2_Review --> Returned_Start: any step returns "start" (level 1, awaits new version)
+    Returned_Start --> Step2_Review: coordinator resubmits (version+1, steps reset)
+    Step2_Review --> Rejected: any step rejects definitively (terminal)
     Rejected --> [*]
     Approved --> [*]
 ```
+
+Returns and terminal rejections are available from every step 2–7; the diagram shows them once for brevity.
 
 ### Key Principles
 
@@ -257,14 +255,18 @@ erDiagram
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | INTEGER | PK, AUTOINCREMENT | Unique requisition ID |
+| `number` | TEXT | UNIQUE | Readable number `REQ-<year>-<0001>`, sequence resets per year (migration 006) |
+| `version` | INTEGER | NOT NULL, DEFAULT 1 | Current document version; incremented on resubmit |
+| `return_reason` | TEXT | NULL | Comments of the latest return; cleared when re-approved/resubmitted |
+| `returned_from_level` | INTEGER | NULL | Step that issued the latest return |
 | `title` | TEXT | NOT NULL | Requisition title |
 | `description` | TEXT | | Optional description |
 | `file_path` | TEXT | NOT NULL | Server path to uploaded file |
 | `original_filename` | TEXT | NOT NULL | Original upload filename |
 | `uploaded_by` | INTEGER | FK → users.id | Uploader user ID |
 | `project_id` | INTEGER | FK → projects.id, NULL | Associated project (optional) |
-| `status` | TEXT | NOT NULL | `pending`, `in_review`, `approved`, `rejected` |
-| `current_approval_level` | INTEGER | DEFAULT 1 | Which step level is currently being reviewed (1–7) |
+| `status` | TEXT | NOT NULL | `in_review`, `returned`, `approved`, `rejected` (`pending` legacy only) |
+| `current_approval_level` | INTEGER | DEFAULT 2 | Step currently being reviewed (2–7); 1 = returned to start awaiting a new version; 8 = fully approved |
 | `selected_quotation_id` | INTEGER | FK → quotations.id, NULL | The quotation selected by the Representante Legal at step 5 |
 | `created_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 | `updated_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
@@ -281,7 +283,20 @@ erDiagram
 | `created_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 | `updated_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 
-**Note:** When a requisition is uploaded, 7 `approval_steps` rows are created (one per step), all starting as `pending`. The `assigned_role_level` for each step is determined by the [`STEP_TO_ROLE_MAP`](src/models/ApprovalStep.js:8) constant (see Section 7 below).
+**Note:** When a requisition is radicada, 7 `approval_steps` rows are created: step 1 `approved` (the upload is the radicación), steps 2–7 `pending`. `assigned_role_level` comes from `STEP_TO_ROLE_MAP` in [`config/workflow.js`](src/config/workflow.js). A return resets steps ≥ target back to `pending`.
+
+#### `requisition_versions`
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PK, AUTOINCREMENT | |
+| `requisition_id` | INTEGER | FK → requisitions.id | |
+| `version` | INTEGER | NOT NULL, UNIQUE with requisition_id | 1 = original upload |
+| `title`, `description` | TEXT | | Snapshot of the requisition text at that version |
+| `file_path`, `original_filename` | TEXT | NOT NULL | The document of that version (never deleted) |
+| `comments` | TEXT | | Coordinator's note when resubmitting |
+| `created_by` | INTEGER | FK → users.id | |
+| `created_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 
 #### `approval_logs`
 
@@ -291,9 +306,18 @@ erDiagram
 | `requisition_id` | INTEGER | FK → requisitions.id | |
 | `approval_step_id` | INTEGER | FK → approval_steps.id | |
 | `user_id` | INTEGER | FK → users.id | Who performed the action |
-| `action` | TEXT | NOT NULL | `approved`, `rejected` |
-| `comments` | TEXT | | Optional reviewer comments |
+| `action` | TEXT | NOT NULL | `uploaded`, `approved`, `returned`, `resubmitted`, `rejected` |
+| `to_level` | INTEGER | NULL | For `returned`: the step the requisition was sent back to |
+| `comments` | TEXT | | Reviewer comments (required for returned/rejected) |
 | `created_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
+
+#### `quotations` (amount columns, migration 006)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `amount` | REAL | required by the API for new rows | Quoted total in `currency`; NULL only on legacy rows |
+| `currency` | TEXT | NOT NULL, DEFAULT `COP` | |
+| `notes` | TEXT | | Optional notes from Encargado/a de Compras |
 
 ### Database Initialization Flow
 
@@ -366,18 +390,30 @@ All endpoints return JSON. Protected routes require `Authorization: Bearer <toke
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/requisitions` | Yes | List requisitions visible to current user |
-| GET | `/api/requisitions/:id` | Yes | Get requisition detail with approval history |
-| POST | `/api/requisitions` | Yes | Upload new requisition (multipart) |
-| GET | `/api/requisitions/:id/download` | Yes | Download the original file |
+| GET | `/api/requisitions` | Yes | List requisitions visible to current user (paginated) |
+| GET | `/api/requisitions/status/:status` | Yes | Same, filtered by status |
+| GET | `/api/requisitions/export.csv` | Yes | CSV of every visible requisition (number, status, step, selected provider/amount…) |
+| GET | `/api/requisitions/:id` | Yes | Detail with steps, logs, quotations and document versions |
+| POST | `/api/requisitions` | Role 1 | Radicar (multipart). Completes step 1; starts at step 2 |
+| POST | `/api/requisitions/:id/resubmit` | Role 1 | Radicar nueva versión after a return to step 1 (multipart) |
+| GET | `/api/requisitions/:id/download` | Yes | Download the current document |
+| GET | `/api/requisitions/:id/versions/:versionId/download` | Yes | Download a previous version |
 
 ### Approvals
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/api/approvals/:requisitionId/approve` | Yes | Approve requisition at current level |
-| POST | `/api/approvals/:requisitionId/reject` | Yes | Reject requisition with comments |
-| GET | `/api/approvals/:requisitionId/history` | Yes | Get full approval log for a requisition |
+| POST | `/api/approvals/:requisitionId/approve` | Yes | Approve at current level (`selected_quotation_id` at step 5) |
+| POST | `/api/approvals/:requisitionId/return` | Yes | Send back: `{ to: 'previous' \| 'start', comments }` (comments required) |
+| POST | `/api/approvals/:requisitionId/reject` | Yes | Terminal rejection with comments |
+| GET | `/api/approvals/:requisitionId/history` | Yes | Full approval log for a requisition |
+| GET | `/api/approvals/export.csv` | Yes | CSV audit trail of every visible requisition |
+
+### Meta
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/meta` | No | Workflow constants shared with the frontend (step→role map, labels, statuses, doc types) |
 
 ### Dashboard
 
@@ -502,15 +538,19 @@ const STEP_TO_ROLE_MAP = {
 ### Requisition Status Transitions
 
 ```
-UPLOADED → IN_REVIEW → APPROVED
-                ↘ REJECTED
+IN_REVIEW (step 2) → … → IN_REVIEW (step 7) → APPROVED
+     ↕ RETURNED (level N-1: previous approver re-approves)
+     ↕ RETURNED (level 1: coordinator resubmits a new version)
+     ↘ REJECTED (terminal)
 ```
+
+`pending` is kept in the CHECK constraint for legacy rows only; new requisitions are never created in that state.
 
 ### 7-Step Approval Flow
 
 | Step | Role | Action |
 |------|------|--------|
-| 1 | Coordinador/a de Territorio | Upload requisition + approve |
+| 1 | Coordinador/a de Territorio | Radicación: the upload itself completes this step (no approval action) |
 | 2 | Director/a Programática | Review + approve |
 | 3 | Representante Legal | Review + approve (first time) |
 | 4 | Encargado/a de Compras | Upload 1–3 quotations with supporting docs + approve |
@@ -520,23 +560,18 @@ UPLOADED → IN_REVIEW → APPROVED
 
 ### Per-Step Logic
 
-1. Requisition is uploaded → `status = 'pending'`, `current_approval_level = 1`
-2. All 7 `approval_steps` are created with `status = 'pending'`, each with `assigned_role_level` from `STEP_TO_ROLE_MAP`
-3. When the user with the matching role approves step 1:
-   - `approval_steps[step_level=1].status = 'approved'`
-   - `requisitions.current_approval_level = 2`
-   - `requisitions.status = 'in_review'`
-   - An `approval_logs` entry is created
-4. Process repeats for steps 2–7, with special behavior at steps 4 and 5:
-   - **Step 4 (Encargado/a de Compras):** Must attach at least 1 complete quotation (with all 4 supporting documents) before approving
-   - **Step 5 (Representante Legal):** Must select one quotation from those attached at step 4 before approving. The selected quotation ID is stored in `requisitions.selected_quotation_id`
-5. When step 7 is approved:
-   - `requisitions.status = 'approved'`
-   - `requisitions.current_approval_level = 8` (past all steps)
-6. If **any** step rejects:
-   - `requisitions.status = 'rejected'`
-   - The step and all subsequent steps remain `pending`
-   - An `approval_logs` entry records the rejection with comments
+1. Coordinator radica (uploads) → one transaction creates the row with `number = REQ-<year>-<seq>`, `version = 1`, `status = 'in_review'`, `current_approval_level = FIRST_APPROVAL_LEVEL (2)`; the 7 `approval_steps` (step 1 `approved`, 2–7 `pending`); version 1 in `requisition_versions`; and an `approval_logs` entry `uploaded`.
+2. Steps 2–7 are approved by the role in `STEP_TO_ROLE_MAP`, with special behavior:
+   - **Step 4 (Encargado/a de Compras):** attaches 1–3 quotations, each with a mandatory `amount` (COP) and the 4 supporting documents; at least one complete quotation is required to approve
+   - **Step 5 (Representante Legal):** selects one quotation (`requisitions.selected_quotation_id`); auto-selected when only one exists
+3. Approving step 7 → `status = 'approved'`, `current_approval_level = 8`
+4. **Return** (`POST /return`, comments required) from step N:
+   - `to: 'previous'` → `current_approval_level = N-1`; `to: 'start'` → `1`. From step 2 both land on 1.
+   - Steps ≥ target reset to `pending`; if target ≤ 5 the quotation selection is cleared (quotations themselves are kept for rework)
+   - `status = 'returned'`, `return_reason`, `returned_from_level` set; log entry `returned` with `to_level`
+   - Target ≥ 2: that step's approver re-approves normally (status goes back to `in_review`, reason cleared)
+   - Target 1: only the original uploader (or a coordinator of the same territory) may `POST /resubmit` with a new file → `version + 1`, new `requisition_versions` row, steps reset (step 1 approved), level 2, log `resubmitted`
+5. **Reject** (`POST /reject`, comments required) is terminal: `status = 'rejected'`; nothing can be resubmitted
 
 ### Quotation Selection at Step 5
 
@@ -554,9 +589,17 @@ When the Representante Legal selects a quotation:
 - `requisitions.selected_quotation_id` is set to the chosen quotation's ID
 - The approve button at step 5 is only enabled after a quotation has been selected
 
-### Rejection Handling
+### Returns vs. Rejection
 
-Rejected requisitions are terminal — they cannot re-enter the approval flow. If a revised version is needed, the user uploads a new requisition.
+Reviewers have three outcomes besides approving: return to the previous step (that approver reformulates and re-approves), return to the start (the coordinator radica a new version of the document, keeping the same number and full history), or reject definitively (terminal). Every version is kept in `requisition_versions` and downloadable.
+
+### Visibility rule
+
+A user sees a requisition once it has reached the lowest step their role owns, once it is approved/rejected, **or if they have acted on it** (so the reviewer who returned it keeps seeing it while it sits at an earlier step). Implemented once in `Requisition.visibilityClause` / `isVisibleTo` and reused by lists, detail, downloads, history and both CSV exports.
+
+### Exports and acta
+
+`/api/requisitions/export.csv` and `/api/approvals/export.csv` emit UTF-8 (BOM) `;`-separated CSV that Excel opens directly. The printable "Acta de aprobación" is rendered client-side at `#/requisitions/:id/acta` from the detail payload with print CSS; no server-side PDF generation.
 
 ### Seed Users
 

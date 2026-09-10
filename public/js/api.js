@@ -68,6 +68,45 @@ async function request(method, path, body, isFormData = false) {
   return data;
 }
 
+// --- File download (authenticated) ---
+
+/** Filename from a Content-Disposition header, or the fallback. */
+function filenameFromDisposition(disposition, fallback) {
+  if (!disposition) return fallback;
+  const utf8 = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8) {
+    try {
+      return decodeURIComponent(utf8[1].trim().replace(/^"|"$/g, ''));
+    } catch (_err) {
+      // fall through to the plain filename
+    }
+  }
+  const plain = disposition.match(/filename="?([^";]+)"?/i);
+  return plain ? plain[1].trim() : fallback;
+}
+
+/**
+ * Download an API resource that needs the Authorization header (e.g. CSV exports):
+ * fetch → blob → object URL → temporary <a download>.
+ * @param {string} path  API path (e.g. '/requisitions/export.csv')
+ * @param {string} [fallbackName]
+ */
+export async function downloadFile(path, fallbackName = 'archivo') {
+  const response = await request('GET', path);
+  const blob = await response.blob();
+  const filename = filenameFromDisposition(response.headers.get('Content-Disposition'), fallbackName);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return filename;
+}
+
 // --- Auth ---
 
 export async function login(username, password) {
@@ -110,6 +149,19 @@ export function downloadRequisition(id) {
   return request('GET', `/requisitions/${id}/download`);
 }
 
+/** Radicar nueva versión (role 1, only when returned to step 1). */
+export function resubmitRequisition(id, formData) {
+  return request('POST', `/requisitions/${id}/resubmit`, formData, true);
+}
+
+export function downloadRequisitionVersion(id, versionId) {
+  return request('GET', `/requisitions/${id}/versions/${versionId}/download`);
+}
+
+export function exportRequisitionsCsv() {
+  return downloadFile('/requisitions/export.csv', 'requisiciones.csv');
+}
+
 // --- Approvals ---
 
 export function approveRequisition(requisitionId, comments, selectedQuotationId) {
@@ -120,8 +172,18 @@ export function approveRequisition(requisitionId, comments, selectedQuotationId)
   return request('POST', `/approvals/${requisitionId}/approve`, body);
 }
 
+/** Send back one step ('previous') or to the start ('start'); comments are required. */
+export function returnRequisition(requisitionId, to, comments) {
+  return request('POST', `/approvals/${requisitionId}/return`, { to, comments });
+}
+
+/** Terminal rejection; comments are required. */
 export function rejectRequisition(requisitionId, comments) {
   return request('POST', `/approvals/${requisitionId}/reject`, { comments });
+}
+
+export function exportApprovalsCsv() {
+  return downloadFile('/approvals/export.csv', 'historial-aprobaciones.csv');
 }
 
 // --- Quotations ---

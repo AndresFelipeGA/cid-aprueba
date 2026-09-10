@@ -2,8 +2,13 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../config/database');
 const AppError = require('../utils/AppError');
+const { CURRENCY } = require('../config/workflow');
+
+const MAX_QUOTATIONS = 3;
 
 const Quotation = {
+  MAX_QUOTATIONS,
+
   findByRequisition(requisitionId) {
     const quotations = db.prepare(`
       SELECT * FROM quotations
@@ -56,19 +61,27 @@ const Quotation = {
     };
   },
 
-  create({ requisitionId, providerName, filePath, originalFilename, createdBy }) {
+  create({ requisitionId, providerName, amount, currency = CURRENCY, notes, filePath, originalFilename, createdBy }) {
     // Check max 3 quotations per requisition
     const count = Quotation.countByRequisition(requisitionId);
-    if (count >= 3) {
-      throw new AppError('La requisición ya tiene el máximo de 3 cotizaciones', 400);
+    if (count >= MAX_QUOTATIONS) {
+      throw new AppError(`La requisición ya tiene el máximo de ${MAX_QUOTATIONS} cotizaciones`, 400, 'MAX_QUOTATIONS_REACHED');
     }
 
     const result = db.prepare(`
-      INSERT INTO quotations (requisition_id, provider_name, file_path, original_filename, created_by)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(requisitionId, providerName, filePath, originalFilename, createdBy);
+      INSERT INTO quotations (requisition_id, provider_name, amount, currency, notes, file_path, original_filename, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(requisitionId, providerName, amount, currency, notes || null, filePath, originalFilename, createdBy);
 
     return Quotation.findById(result.lastInsertRowid);
+  },
+
+  /** Undo any selection (used when a requisition is returned to step 5 or earlier). */
+  resetSelection(requisitionId) {
+    db.prepare(`
+      UPDATE quotations SET status = 'active', updated_at = datetime('now')
+      WHERE requisition_id = ?
+    `).run(requisitionId);
   },
 
   delete(id) {

@@ -5,8 +5,10 @@
 import * as API from '../api.js';
 import { state } from '../state.js';
 import { escapeHtml, formatDateShort } from '../utils/format.js';
-import { statusBadge, statusOptions, stepOptions, maxStep } from '../meta.js';
+import { statusBadge, statusLabel, statusOptions, stepOptions, maxStep } from '../meta.js';
 import { renderFilterableTable } from '../ui/table.js';
+import { showToast } from '../ui/toast.js';
+import { setButtonBusy } from '../ui/feedback.js';
 
 export const title = 'Requisiciones';
 
@@ -23,12 +25,17 @@ export function buildProgressBar(req) {
     percent = 100;
     fillClass = 'req-progress__fill--approved';
     labelClass = 'req-progress__label--approved';
-    labelText = 'Aprobado';
+    labelText = statusLabel('approved');
   } else if (req.status === 'rejected') {
-    if (percent < 5) percent = 5; // at least a sliver when rejected at step 1
+    if (percent < 5) percent = 5; // at least a sliver when rejected early
     fillClass = 'req-progress__fill--rejected';
     labelClass = 'req-progress__label--rejected';
-    labelText = `Rechazado — Paso ${level} de ${totalSteps}`;
+    labelText = `${statusLabel('rejected')} — Paso ${level} de ${totalSteps}`;
+  } else if (req.status === 'returned') {
+    if (percent < 5) percent = 5;
+    fillClass = 'req-progress__fill--returned';
+    labelClass = 'req-progress__label--returned';
+    labelText = `${statusLabel('returned')} — Paso ${level} de ${totalSteps}`;
   }
 
   return `
@@ -36,7 +43,7 @@ export function buildProgressBar(req) {
       <div class="req-progress__bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(percent)}" aria-label="${escapeHtml(labelText)}">
         <div class="req-progress__fill ${fillClass}" data-width="${percent}%"></div>
       </div>
-      <span class="req-progress__label ${labelClass}">${labelText}</span>
+      <span class="req-progress__label ${labelClass}">${escapeHtml(labelText)}</span>
     </div>
   `;
 }
@@ -68,9 +75,9 @@ export async function render(container, _params, ctx) {
     filters: {
       search: {
         id: 'req-search',
-        placeholder: '🔍 Buscar requisición...',
+        placeholder: '🔍 Buscar por número, título o responsable...',
         label: 'Buscar requisición',
-        fields: (req) => [req.title, req.description, req.uploader_name],
+        fields: (req) => [req.number, req.title, req.description, req.uploader_name],
       },
       selects: [
         {
@@ -90,6 +97,11 @@ export async function render(container, _params, ctx) {
       ],
     },
     columns: [
+      {
+        header: 'Número',
+        render: (req) =>
+          `<span class="req-number">${escapeHtml(req.number || `#${req.id}`)}</span>${req.version > 1 ? ` <span class="version-badge">v${req.version}</span>` : ''}`,
+      },
       { header: 'Título', render: (req) => escapeHtml(req.title) },
       {
         header: 'Proyecto',
@@ -97,11 +109,11 @@ export async function render(container, _params, ctx) {
       },
       { header: 'Estado', render: (req) => statusBadge(req.status) },
       { header: 'Progreso', render: buildProgressBar },
-      { header: 'Subido por', render: (req) => escapeHtml(req.uploader_name) },
+      { header: 'Radicada por', render: (req) => escapeHtml(req.uploader_name) },
       { header: 'Fecha', render: (req) => formatDateShort(req.created_at) },
     ],
     rowAttrs: (req) =>
-      `class="table__row--clickable" role="button" tabindex="0" data-action="view-requisition" data-id="${req.id}" aria-label="Ver requisición ${escapeHtml(req.title)}"`,
+      `class="table__row--clickable" role="button" tabindex="0" data-action="view-requisition" data-id="${req.id}" aria-label="Ver requisición ${escapeHtml(req.number || '')} ${escapeHtml(req.title)}"`,
     afterRender: (tableContainer) => {
       requestAnimationFrame(() => {
         tableContainer.querySelectorAll('.req-progress__fill').forEach((fill) => {
@@ -111,4 +123,28 @@ export async function render(container, _params, ctx) {
       });
     },
   });
+
+  // "Exportar CSV" sits in the same row as the filters
+  const filterBar = container.querySelector('#req-filters .search-filters');
+  if (filterBar) {
+    filterBar.insertAdjacentHTML(
+      'beforeend',
+      '<button class="btn btn--outline search-filters__export" id="btn-export-requisitions" data-action="export-requisitions">Exportar CSV</button>',
+    );
+  }
 }
+
+async function exportCsv(btn) {
+  const restore = setButtonBusy(btn, 'Exportando...');
+  try {
+    await API.exportRequisitionsCsv();
+  } catch (err) {
+    showToast(err.message || 'No se pudo exportar el archivo', 'error');
+  } finally {
+    restore();
+  }
+}
+
+export const actions = {
+  'export-requisitions': (t) => exportCsv(t),
+};

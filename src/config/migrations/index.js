@@ -19,6 +19,7 @@ const migrations = [
   require('./003_workflow_restructure'),
   require('./004_projects'),
   require('./005_indexes'),
+  require('./006_returns_amounts_numbering'),
 ];
 
 /**
@@ -68,6 +69,10 @@ function runMigrations(rawDb, dbPath) {
   for (const migration of pending) {
     logger.info(`Running migration ${migration.version}: ${migration.name}...`);
 
+    // Table rebuilds (SQLite cannot ALTER a CHECK constraint) need FK enforcement off.
+    // PRAGMA foreign_keys is a no-op inside a transaction, so toggle it outside.
+    if (migration.disableForeignKeys) rawDb.run('PRAGMA foreign_keys = OFF');
+
     rawDb.run('BEGIN TRANSACTION');
     try {
       migration.up(rawDb);
@@ -83,6 +88,8 @@ function runMigrations(rawDb, dbPath) {
       rawDb.run('ROLLBACK');
       logger.error(`Migration ${migration.version} (${migration.name}) failed`, { stack: err.stack });
       throw new Error(`Migration ${migration.version} failed: ${err.message}`);
+    } finally {
+      if (migration.disableForeignKeys) rawDb.run('PRAGMA foreign_keys = ON');
     }
   }
 

@@ -40,6 +40,27 @@ export function formatDateShort(dateStr) {
   return formatWith(DATE_SHORT, dateStr);
 }
 
+const CURRENCY_COP = new Intl.NumberFormat('es-CO', {
+  style: 'currency',
+  currency: 'COP',
+  maximumFractionDigits: 0,
+});
+
+/** Colombian pesos without decimals, e.g. "$ 1.250.000". */
+export function formatCurrency(amount) {
+  const value = Number(amount);
+  if (amount === null || amount === undefined || amount === '' || Number.isNaN(value)) return '—';
+  return CURRENCY_COP.format(value);
+}
+
+/** Signed percentage with one decimal, e.g. "+12,5 %". */
+export function formatPercent(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
+  const num = Number(value);
+  const sign = num > 0 ? '+' : '';
+  return `${sign}${num.toLocaleString('es-CO', { maximumFractionDigits: 1 })} %`;
+}
+
 export function formatBytes(bytes) {
   if (!bytes) return '0 Bytes';
   const k = 1024;

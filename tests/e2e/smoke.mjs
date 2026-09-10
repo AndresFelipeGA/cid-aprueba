@@ -116,6 +116,112 @@ async function dismissEmailModalIfOpen(page) {
   }
 }
 
+/** Full reload onto a hash (token lives in localStorage) and settle the shell. */
+async function openHash(page, hash) {
+  await page.goto(`${BASE}/${hash}`, { waitUntil: 'domcontentloaded' });
+  await expectVisible(page, '#app-view', 'app shell after reload');
+  await expectVisible(page, '#user-name', 'header user name after reload');
+  await expectHash(page, hash);
+  await dismissEmailModalIfOpen(page);
+}
+
+/** Poll until the first element matching `selector` has the expected text (views re-render asynchronously). */
+async function expectText(page, selector, matcher, what = selector) {
+  const isRegex = matcher instanceof RegExp;
+  try {
+    await page.waitForFunction(
+      ([sel, m, re]) => {
+        const el = document.querySelector(sel);
+        if (!el) return false;
+        const text = (el.textContent || '').trim();
+        return re ? new RegExp(m).test(text) : text === m;
+      },
+      [selector, isRegex ? matcher.source : matcher, isRegex],
+      { timeout: TIMEOUT },
+    );
+  } catch (_err) {
+    const current = await page.locator(selector).first().textContent({ timeout: 1000 }).catch(() => null);
+    fail(`expected ${what} (${selector}) text to match ${matcher}, got ${current === null ? 'no element' : `"${current.trim()}"`}`);
+  }
+  return ((await page.locator(selector).first().textContent()) || '').trim();
+}
+
+// --- API helpers (seed data the UI cannot reach in a single session) ---
+
+async function apiLogin(username) {
+  const res = await fetch(`${BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password: PASSWORD }),
+  });
+  const json = await res.json();
+  if (!res.ok || !json.data || !json.data.token) fail(`API login failed for ${username}: ${json.message || res.status}`);
+  return json.data.token;
+}
+
+async function api(token, method, path, body) {
+  const headers = { Authorization: `Bearer ${token}` };
+  let payload = body;
+  if (body && !(body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+    payload = JSON.stringify(body);
+  }
+  const res = await fetch(`${BASE}/api${path}`, { method, headers, body: payload });
+  const json = await res.json();
+  if (!res.ok) fail(`API ${method} ${path} failed (${res.status}): ${json.message || JSON.stringify(json)}`);
+  return json;
+}
+
+const pdfForm = (fields, filename) => {
+  const form = new FormData();
+  for (const [key, value] of Object.entries(fields)) form.append(key, String(value));
+  form.append('file', new Blob([PDF], { type: 'application/pdf' }), filename);
+  return form;
+};
+
+/** Create a second requisition and drive it through all 7 steps to 'approved'. */
+async function seedApprovedRequisition() {
+  step = 'seed approved requisition (API)';
+  const coord = await apiLogin('coord.territorio');
+  const created = await api(coord, 'POST', '/requisitions', pdfForm({
+    title: `E2E Aprobada ${Date.now()}`,
+    description: 'Sembrada por la prueba de humo para el acta',
+  }, 'acta.pdf'));
+  const req = created.data.requisition;
+  if (req.current_approval_level !== 2 || req.status !== 'in_review') {
+    fail(`new requisition should start at step 2 in_review, got step ${req.current_approval_level} ${req.status}`);
+  }
+
+  const approve = async (username, comments) => {
+    const token = await apiLogin(username);
+    return api(token, 'POST', `/approvals/${req.id}/approve`, { comments });
+  };
+
+  await approve('dir.programatica', 'Aprobación programática (e2e)');
+  await approve('rep.legal', 'Aprobación legal (e2e)');
+
+  const compras = await apiLogin('enc.compras');
+  const quotation = await api(compras, 'POST', `/requisitions/${req.id}/quotations`, pdfForm({
+    provider_name: 'Proveedor E2E S.A.S.',
+    amount: 1250000,
+    notes: 'Entrega en 15 días',
+  }, 'cotizacion.pdf'));
+  const qId = quotation.data.quotation.id;
+  for (const docType of ['rut', 'camara_comercio', 'cedula', 'certificado_bancario']) {
+    await api(compras, 'POST', `/requisitions/${req.id}/quotations/${qId}/documents`, pdfForm({ doc_type: docType }, `${docType}.pdf`));
+  }
+  await api(compras, 'POST', `/approvals/${req.id}/approve`, { comments: 'Cotizaciones completas (e2e)' });
+
+  await approve('rep.legal', 'Cotización única seleccionada (e2e)');
+  await approve('area.financiera', 'Aprobación financiera (e2e)');
+  const final = await approve('area.compras', 'Aprobación final (e2e)');
+
+  const approved = final.data.requisition;
+  if (approved.status !== 'approved') fail(`seeded requisition should be approved, got ${approved.status}`);
+  log(`seeded ${approved.number} through all 7 steps to "approved"`);
+  return approved;
+}
+
 async function run(page) {
   // --- Coordinator flow ---
   step = 'open app';
@@ -134,6 +240,8 @@ async function run(page) {
   await expectHash(page, '#/requisitions');
   await expectVisible(page, '#req-search', 'requisitions search box');
   await expectAttached(page, '#req-filter-level option[value="7"]', 'step filter populated from /api/meta');
+  await expectAttached(page, '#req-filter-status option[value="returned"]', 'status filter built from meta.status_labels');
+  await expectVisible(page, '#btn-export-requisitions', 'Exportar CSV button');
   await expectVisible(page, '#req-table-container', 'requisitions table container');
   log('requisitions list rendered');
 
@@ -156,8 +264,11 @@ async function run(page) {
   await expectVisible(page, '.req-detail__title', 'requisition detail title');
   const shownTitle = (await page.locator('.req-detail__title').textContent()).trim();
   if (shownTitle !== reqTitle) fail(`detail title mismatch: "${shownTitle}" !== "${reqTitle}"`);
+  const reqNumber = await expectText(page, '.req-detail__number', /^REQ-\d{4}-\d{4}$/, 'requisition number');
+  await expectText(page, '.req-detail__heading .badge', 'En revisión', 'status badge (creation lands at step 2)');
   await expectVisible(page, '.timeline__item--current', 'current timeline step');
-  log(`detail rendered at ${detailHash}`);
+  if ((await page.locator('#approval-panel').count()) !== 0) fail('coordinator must not see an approval panel at step 2');
+  log(`detail rendered at ${detailHash} as ${reqNumber}`);
 
   step = 'profile';
   await page.click('.sidebar__link[data-view="profile"]');
@@ -182,6 +293,7 @@ async function run(page) {
   await login(page, 'rep.legal');
   await expectHash(page, '#/dashboard'); // logout must drop the previous user's deep link
   await dismissEmailModalIfOpen(page);
+  await expectVisible(page, '#btn-export-approvals', 'Exportar historial button for role 3');
 
   step = 'users';
   await expectVisible(page, '#nav-users', 'users nav link for role 3');
@@ -200,12 +312,89 @@ async function run(page) {
   await page.keyboard.press('Escape');
   await page.locator('#confirm-dialog[open]').waitFor({ state: 'hidden', timeout: TIMEOUT });
   log('confirm dialog opens and closes with Escape');
+
+  await logout(page);
+
+  // --- Director/a Programática returns the requisition to the start ---
+  await login(page, 'dir.programatica');
+  await dismissEmailModalIfOpen(page);
+  await openHash(page, detailHash);
+
+  step = 'return to start';
+  await expectVisible(page, '#approval-panel', 'approval panel for step 2 owner');
+  if ((await page.locator('input[name="approval-action"][value="return_previous"]').count()) !== 0) {
+    fail('"Devolver al paso anterior" must be hidden at step 2');
+  }
+  await page.check('input[name="approval-action"][value="return_start"]');
+  await expectText(page, '#btn-approval-submit', 'Devolver al inicio', 'submit button label follows the option');
+  if (!(await page.locator('#btn-approval-submit').getAttribute('class')).includes('btn--warning')) {
+    fail('return option should use the warning button colour');
+  }
+  await page.click('#btn-approval-submit'); // no comments yet → inline validation
+  await expectVisible(page, '#approval-comments-error', 'inline "comments required" error');
+  if ((await page.locator('#confirm-dialog[open]').count()) !== 0) fail('confirm dialog must not open without comments');
+  await page.fill('#approval-comments', 'Falta el anexo presupuestal, por favor radicar nueva versión.');
+  await page.click('#btn-approval-submit');
+  await expectVisible(page, '#confirm-dialog[open]', 'return confirmation dialog');
+  await page.click('#confirm-dialog-accept');
+  await expectText(page, '.req-detail__heading .badge', 'Devuelta', 'status badge after return');
+  await expectVisible(page, '.returned-banner', 'returned banner');
+  await expectVisible(page, '.activity-item--returned', 'returned entry in history');
+  log('requisition returned to start (badge "Devuelta")');
+
+  await logout(page);
+
+  // --- Coordinator resubmits a new version ---
+  await login(page, 'coord.territorio');
+  await dismissEmailModalIfOpen(page);
+  await openHash(page, detailHash);
+
+  step = 'resubmit new version';
+  await expectVisible(page, '#resubmit-panel', 'resubmit panel for the coordinator');
+  const prefilled = await page.inputValue('#resubmit-title');
+  if (prefilled !== reqTitle) fail(`resubmit title should be prefilled, got "${prefilled}"`);
+  await page.setInputFiles('#resubmit-file', { name: 'e2e-v2.pdf', mimeType: 'application/pdf', buffer: PDF });
+  await expectText(page, '#resubmit-file-name', 'e2e-v2.pdf', 'selected new file name');
+  await page.fill('#resubmit-comments', 'Se agrega el anexo presupuestal.');
+  await page.click('#btn-resubmit');
+  await expectVisible(page, '.toast--success', 'resubmit success toast');
+  await expectText(page, '.req-detail__heading .version-badge', 'v2', 'v2 badge');
+  await expectText(page, '.req-detail__heading .badge', 'En revisión', 'status back to "En revisión"');
+  await expectVisible(page, '#versions-panel', 'versions section');
+  if ((await page.locator('#versions-panel .version-item').count()) < 2) fail('expected two document versions');
+  log('new version radicada (v2, "En revisión")');
+
+  // --- Fully approved requisition (seeded through the API) → acta + amounts ---
+  const approved = await seedApprovedRequisition();
+
+  step = 'acta';
+  await openHash(page, `#/requisitions/${approved.id}/acta`);
+  await expectText(page, '.acta__title', 'Acta de aprobación', 'acta title');
+  await expectText(page, '.acta__number', approved.number, 'acta number');
+  await expectVisible(page, '.acta__table', 'acta steps table');
+  const signatureCount = await page.locator('.acta__signature').count();
+  if (signatureCount < 5) fail(`expected at least 5 distinct signers, got ${signatureCount}`);
+  await expectVisible(page, '.acta__row--selected', 'selected quotation highlighted in the acta');
+  await expectVisible(page, '#btn-print-acta', 'print button');
+  log(`acta rendered for ${approved.number} with ${signatureCount} signatures`);
+
+  step = 'approved detail';
+  await openHash(page, `#/requisitions/${approved.id}`);
+  await expectText(page, '.req-detail__heading .badge', 'Aprobada', 'approved status badge');
+  await expectVisible(page, '#btn-generate-acta', '"Generar acta" button');
+  const amountText = await expectText(page, '.quotation-card__amount', /\$\s?\d/, 'formatted quotation amount');
+  if (!amountText.includes('$') || !/\d/.test(amountText)) fail(`amount should be formatted as currency, got "${amountText}"`);
+  await page.click('#btn-generate-acta');
+  await expectHash(page, `#/requisitions/${approved.id}/acta`);
+  await expectVisible(page, '.acta', 'acta via "Generar acta" button');
+  log(`approved detail shows amount "${amountText}" and links to the acta`);
 }
 
 async function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cid-e2e-'));
   let server = null;
   let browser = null;
+  let page = null;
   let exitCode = 0;
 
   try {
@@ -230,7 +419,7 @@ async function main() {
 
     step = 'launch browser';
     browser = await launchBrowser();
-    const page = await browser.newPage();
+    page = await browser.newPage();
     page.setDefaultTimeout(TIMEOUT);
 
     page.on('pageerror', (err) => problems.push(`pageerror: ${err.message}`));
@@ -249,6 +438,10 @@ async function main() {
     }
   } catch (err) {
     console.error(`\nE2E smoke test FAILED: ${err.message}`);
+    if (page && process.env.E2E_SCREENSHOT) {
+      await page.screenshot({ path: process.env.E2E_SCREENSHOT, fullPage: true }).catch(() => {});
+      console.error(`Screenshot saved to ${process.env.E2E_SCREENSHOT}`);
+    }
     if (problems.length > 0) {
       console.error('Browser reported errors:');
       for (const p of problems) console.error(`  - ${p}`);

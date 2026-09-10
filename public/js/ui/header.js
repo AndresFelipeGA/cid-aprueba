@@ -25,9 +25,13 @@ export function setHeaderTitle(title) {
   if (el) el.textContent = title || '';
 }
 
+/** Views that live under the "Requisiciones" nav entry. */
+const NAV_PARENT = { 'requisition-detail': 'requisitions', acta: 'requisitions' };
+
 export function setActiveNav(view) {
+  const navView = NAV_PARENT[view] || view;
   document.querySelectorAll('.sidebar__link').forEach((link) => {
-    link.classList.toggle('sidebar__link--active', link.dataset.view === view);
+    link.classList.toggle('sidebar__link--active', link.dataset.view === navView);
   });
 }
 

@@ -55,6 +55,15 @@ export function maxStep() {
   return meta().max_step || 7;
 }
 
+/** First step that requires an approval (step 1 is the coordinator's upload). */
+export function firstApprovalLevel() {
+  return meta().first_approval_level || 2;
+}
+
+export function currency() {
+  return meta().currency || 'COP';
+}
+
 /** Quotation document types as [{ key, label }]. */
 export function docTypes() {
   return Object.entries(meta().doc_types || {}).map(([key, label]) => ({ key, label }));
@@ -66,21 +75,7 @@ export function acceptAttr() {
   return exts.join(',');
 }
 
-// --- Statuses & actions (UI vocabulary) ---
-
-const STATUS_LABELS = {
-  pending: 'Pendiente',
-  in_review: 'En revisión',
-  approved: 'Aprobado',
-  rejected: 'Rechazado',
-  uploaded: 'Subido',
-};
-
-const ACTION_LABELS = {
-  approved: 'Aprobó',
-  rejected: 'Rechazó',
-  uploaded: 'Subió',
-};
+// --- Statuses & actions (UI vocabulary, from meta.status_labels / meta.log_actions) ---
 
 const GENDERS = [
   ['', 'Prefiero no decir'],
@@ -88,16 +83,22 @@ const GENDERS = [
   ['F', 'Femenino'],
 ];
 
+/** { status: label } as served by /api/meta. */
+export function statusLabels() {
+  return meta().status_labels || {};
+}
+
 export function statusLabel(status) {
-  return STATUS_LABELS[status] || status;
+  return statusLabels()[status] || status;
 }
 
 export function statusBadge(status) {
   return `<span class="badge badge--${escapeHtml(status)}">${escapeHtml(statusLabel(status))}</span>`;
 }
 
+/** Past-tense verb for an approval_logs action ('Aprobó', 'Devolvió', ...). */
 export function actionLabel(action) {
-  return ACTION_LABELS[action] || action;
+  return (meta().log_actions || {})[action] || action;
 }
 
 // --- <option> generators ---
@@ -122,8 +123,9 @@ export function stepOptions(selected) {
 }
 
 export function statusOptions(selected) {
-  const entries = (meta().statuses || Object.keys(STATUS_LABELS).filter((s) => s !== 'uploaded'))
-    .map((status) => [status, statusLabel(status)]);
+  const labels = statusLabels();
+  const statuses = meta().statuses || Object.keys(labels);
+  const entries = statuses.map((status) => [status, labels[status] || status]);
   return optionsHtml(entries, selected);
 }
 

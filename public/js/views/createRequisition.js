@@ -226,10 +226,11 @@ async function handleCreateRequisition(e) {
 
   try {
     const result = await API.createRequisition(formData);
-    const message = result.message || 'Requisición creada exitosamente';
+    const created = result.data.requisition;
+    const message = result.message || `Requisición ${created.number || ''} radicada exitosamente`.replace('  ', ' ');
     setFeedback(feedback, 'success', message);
     showToast(message, 'success');
-    const requisitionId = result.data.requisition.id;
+    const requisitionId = created.id;
     setTimeout(() => navigate('requisition-detail', { id: requisitionId }), 1500);
   } catch (err) {
     setFeedback(feedback, 'error', err.message || 'Error al crear la requisición');

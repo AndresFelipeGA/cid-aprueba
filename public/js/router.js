@@ -1,6 +1,7 @@
 /* ============================================
    CID Aprueba — Hash router
-   #/dashboard · #/requisitions · #/requisitions/:id · #/create · #/profile · #/users
+   #/dashboard · #/requisitions · #/requisitions/:id · #/requisitions/:id/acta
+   #/create · #/profile · #/users
    ============================================ */
 
 import { state, setRoute, nextRenderGeneration, isCurrentGeneration } from './state.js';
@@ -13,6 +14,7 @@ const ROUTES = [
   { pattern: /^\/dashboard\/?$/, view: 'dashboard' },
   { pattern: /^\/requisitions\/?$/, view: 'requisitions' },
   { pattern: /^\/requisitions\/(\d+)\/?$/, view: 'requisition-detail', params: (m) => ({ id: m[1] }) },
+  { pattern: /^\/requisitions\/(\d+)\/acta\/?$/, view: 'acta', params: (m) => ({ id: m[1] }) },
   { pattern: /^\/create\/?$/, view: 'create-requisition' },
   { pattern: /^\/profile\/?$/, view: 'profile' },
   { pattern: /^\/users\/?$/, view: 'users' },
@@ -22,6 +24,7 @@ const PATHS = {
   dashboard: () => '/dashboard',
   requisitions: () => '/requisitions',
   'requisition-detail': (p) => `/requisitions/${p.id}`,
+  acta: (p) => `/requisitions/${p.id}/acta`,
   'create-requisition': () => '/create',
   profile: () => '/profile',
   users: () => '/users',

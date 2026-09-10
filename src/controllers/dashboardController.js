@@ -13,6 +13,7 @@ const dashboardController = {
     const byStatus = {
       pending: (statusCounts.pending || 0),
       in_review: (statusCounts.in_review || 0),
+      returned: (statusCounts.returned || 0),
       approved: (statusCounts.approved || 0),
       rejected: (statusCounts.rejected || 0),
     };
@@ -35,6 +36,7 @@ const dashboardController = {
           total: statusCounts.total || 0,
           pending: statusCounts.pending || 0,
           in_review: statusCounts.in_review || 0,
+          returned: statusCounts.returned || 0,
           approved: statusCounts.approved || 0,
           rejected: statusCounts.rejected || 0,
         },

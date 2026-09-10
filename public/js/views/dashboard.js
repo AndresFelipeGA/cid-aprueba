@@ -3,11 +3,25 @@
    ============================================ */
 
 import * as API from '../api.js';
+import { state } from '../state.js';
 import { escapeHtml, formatDateShort } from '../utils/format.js';
-import { statusBadge, actionLabel, maxStep } from '../meta.js';
+import { statusBadge, statusLabel, actionLabel, stepLabel, maxStep } from '../meta.js';
 import { hrefFor } from '../router.js';
+import { showToast } from '../ui/toast.js';
+import { setButtonBusy } from '../ui/feedback.js';
 
 export const title = 'Panel de Control';
+
+const ADMIN_ROLE = 3; // Representante Legal
+
+/** Donut order and colours; labels come from meta.status_labels. */
+const STATUS_COLORS = [
+  { key: 'pending', color: '#C85A2A' },
+  { key: 'in_review', color: '#6B8E23' },
+  { key: 'returned', color: '#E6A817' },
+  { key: 'approved', color: '#3D5A1E' },
+  { key: 'rejected', color: '#B22222' },
+];
 
 // --- Animated counter ---
 
@@ -32,12 +46,12 @@ function animateCounter(element, targetValue, duration = 1500) {
 // --- SVG donut chart ---
 
 function buildDonutChart(byStatus) {
-  const data = [
-    { key: 'pending', label: 'Pendiente', value: byStatus.pending || 0, color: '#C85A2A' },
-    { key: 'in_review', label: 'En revisión', value: byStatus.in_review || 0, color: '#6B8E23' },
-    { key: 'approved', label: 'Aprobado', value: byStatus.approved || 0, color: '#3D5A1E' },
-    { key: 'rejected', label: 'Rechazado', value: byStatus.rejected || 0, color: '#B22222' },
-  ];
+  const data = STATUS_COLORS.map(({ key, color }) => ({
+    key,
+    color,
+    label: statusLabel(key),
+    value: byStatus[key] || 0,
+  }));
 
   const total = data.reduce((sum, d) => sum + d.value, 0);
   const size = 200;
@@ -81,7 +95,7 @@ function buildDonutChart(byStatus) {
       (d) => `
       <div class="chart-legend__item">
         <span class="chart-legend__dot" style="background-color: ${d.color}"></span>
-        <span class="chart-legend__label">${d.label}</span>
+        <span class="chart-legend__label">${escapeHtml(d.label)}</span>
         <span class="chart-legend__value">${d.value}</span>
       </div>`,
     )
@@ -111,7 +125,7 @@ function buildBarChart(byStep) {
     const pct = (count / maxCount) * 100;
     const isZero = count === 0;
     rows += `
-      <div class="bar-row${isZero ? ' bar-row--zero' : ''}">
+      <div class="bar-row${isZero ? ' bar-row--zero' : ''}" title="${escapeHtml(stepLabel(step))}">
         <span class="bar-label">Paso ${step}</span>
         <div class="bar-track">
           <div class="bar-fill" data-target-pct="${pct}" style="width: 0%"></div>
@@ -135,35 +149,79 @@ function animateBarChart(container) {
   });
 }
 
+// --- Pending list ---
+
+function pendingTag(requisition) {
+  if (requisition.status !== 'returned') return '';
+  const user = state.user;
+  const text = user && user.role_level === 1 ? 'Requiere nueva versión' : statusLabel('returned');
+  return `<span class="tag tag--warning pending-item__tag">${escapeHtml(text)}</span>`;
+}
+
+function renderPendingItem(requisition) {
+  const number = requisition.number ? `<span class="req-number">${escapeHtml(requisition.number)}</span> ` : '';
+  return `
+    <div class="pending-item" role="button" tabindex="0" data-action="view-requisition" data-id="${requisition.id}" aria-label="Ver requisición ${escapeHtml(requisition.number || '')} ${escapeHtml(requisition.title)}">
+      <div>
+        <div class="pending-item__title">${number}${escapeHtml(requisition.title)} ${pendingTag(requisition)}</div>
+        <div class="pending-item__meta">Radicada por ${escapeHtml(requisition.uploader_name)} — ${formatDateShort(requisition.created_at)} — ${escapeHtml(stepLabel(requisition.current_approval_level))}</div>
+      </div>
+      ${statusBadge(requisition.status)}
+    </div>
+  `;
+}
+
+// --- Recent activity ---
+
+function renderActivityItem(log) {
+  const isReturn = log.action === 'returned';
+  const target = isReturn && log.to_level
+    ? ` <span class="activity-item__target">→ paso ${log.to_level} (${escapeHtml(stepLabel(log.to_level))})</span>`
+    : '';
+  const number = log.requisition_number ? `<span class="req-number">${escapeHtml(log.requisition_number)}</span> — ` : '';
+  return `
+    <div class="activity-item${isReturn ? ' activity-item--returned' : ''}">
+      <div class="activity-item__text">
+        <strong>${escapeHtml(log.user_name)}</strong>
+        ${escapeHtml(actionLabel(log.action))}
+        <a href="${hrefFor('requisition-detail', { id: log.requisition_id })}">${number}${escapeHtml(log.requisition_title)}</a>${target}
+        ${log.comments ? `<br><em>"${escapeHtml(log.comments)}"</em>` : ''}
+      </div>
+      <div class="activity-item__time">${formatDateShort(log.created_at)}</div>
+    </div>
+  `;
+}
+
 // --- Render ---
 
 export async function render(container, _params, ctx) {
   const [statsResult, pendingResult] = await Promise.all([API.getDashboardStats(), API.getPending()]);
   if (ctx.isStale()) return;
 
-  const stats = statsResult.data.summary;
-  const byStatus = statsResult.data.by_status || { pending: 0, in_review: 0, approved: 0, rejected: 0 };
+  const stats = statsResult.data.summary || {};
+  const byStatus = statsResult.data.by_status || {};
   const byStep = statsResult.data.by_step || {};
   const recentActivity = statsResult.data.recent_activity || [];
   const pendingRequisitions = pendingResult.data.items || [];
-  const pendingTotal = (stats.pending || 0) + (stats.in_review || 0);
+  const openTotal = (stats.pending || 0) + (stats.in_review || 0) + (stats.returned || 0);
+  const isAdmin = Boolean(state.user && state.user.role_level === ADMIN_ROLE);
 
   let html = `
     <div class="stats">
       <div class="stat-card stat-card--total">
         <div class="stat-card__label">Total Requisiciones</div>
-        <div class="stat-card__value stat-counter" data-target="${stats.total}">0</div>
+        <div class="stat-card__value stat-counter" data-target="${stats.total || 0}">0</div>
       </div>
       <div class="stat-card stat-card--pending">
-        <div class="stat-card__label">Pendientes</div>
-        <div class="stat-card__value stat-counter" data-target="${pendingTotal}">0</div>
+        <div class="stat-card__label">En proceso</div>
+        <div class="stat-card__value stat-counter" data-target="${openTotal}">0</div>
       </div>
       <div class="stat-card stat-card--approved">
-        <div class="stat-card__label">Aprobados</div>
+        <div class="stat-card__label">${escapeHtml(statusLabel('approved'))}s</div>
         <div class="stat-card__value stat-counter" data-target="${stats.approved || 0}">0</div>
       </div>
       <div class="stat-card stat-card--rejected">
-        <div class="stat-card__label">Rechazados</div>
+        <div class="stat-card__label">${escapeHtml(statusLabel('rejected'))}s</div>
         <div class="stat-card__value stat-counter" data-target="${stats.rejected || 0}">0</div>
       </div>
     </div>
@@ -185,42 +243,22 @@ export async function render(container, _params, ctx) {
   if (pendingRequisitions.length === 0) {
     html += '<div class="empty">No tienes requisiciones pendientes por revisar</div>';
   } else {
-    html += '<div class="pending-list">';
-    for (const requisition of pendingRequisitions) {
-      html += `
-        <div class="pending-item" role="button" tabindex="0" data-action="view-requisition" data-id="${requisition.id}" aria-label="Ver requisición ${escapeHtml(requisition.title)}">
-          <div>
-            <div class="pending-item__title">${escapeHtml(requisition.title)}</div>
-            <div class="pending-item__meta">Subido por ${escapeHtml(requisition.uploader_name)} — ${formatDateShort(requisition.created_at)}</div>
-          </div>
-          ${statusBadge(requisition.status)}
-        </div>
-      `;
-    }
-    html += '</div>';
+    html += `<div class="pending-list">${pendingRequisitions.map(renderPendingItem).join('')}</div>`;
   }
   html += '</div>';
 
   // Recent activity
-  html += '<div class="section"><h3 class="section__title">Actividad Reciente</h3>';
+  html += `
+    <div class="section">
+      <div class="section__header">
+        <h3 class="section__title">Actividad Reciente</h3>
+        ${isAdmin ? '<button class="btn btn--outline btn--sm" id="btn-export-approvals" data-action="export-approvals">Exportar historial</button>' : ''}
+      </div>
+  `;
   if (recentActivity.length === 0) {
     html += '<div class="empty">No hay actividad reciente</div>';
   } else {
-    html += '<div class="activity-list">';
-    for (const log of recentActivity) {
-      html += `
-        <div class="activity-item">
-          <div class="activity-item__text">
-            <strong>${escapeHtml(log.user_name)}</strong>
-            ${escapeHtml(actionLabel(log.action))}
-            <a href="${hrefFor('requisition-detail', { id: log.requisition_id })}">${escapeHtml(log.requisition_title)}</a>
-            ${log.comments ? `<br><em>"${escapeHtml(log.comments)}"</em>` : ''}
-          </div>
-          <div class="activity-item__time">${formatDateShort(log.created_at)}</div>
-        </div>
-      `;
-    }
-    html += '</div>';
+    html += `<div class="activity-list">${recentActivity.map(renderActivityItem).join('')}</div>`;
   }
   html += '</div>';
 
@@ -233,3 +271,18 @@ export async function render(container, _params, ctx) {
     animateBarChart(container);
   });
 }
+
+async function exportHistory(btn) {
+  const restore = setButtonBusy(btn, 'Exportando...');
+  try {
+    await API.exportApprovalsCsv();
+  } catch (err) {
+    showToast(err.message || 'No se pudo exportar el historial', 'error');
+  } finally {
+    restore();
+  }
+}
+
+export const actions = {
+  'export-approvals': (t) => exportHistory(t),
+};

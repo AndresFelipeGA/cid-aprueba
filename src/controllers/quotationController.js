@@ -52,6 +52,8 @@ const quotationController = {
     const quotation = Quotation.create({
       requisitionId,
       providerName,
+      amount: req.body.amount,
+      notes: req.body.notes,
       filePath: storeQuotationFile(req.file, requisitionId, 'cotizacion'),
       originalFilename: req.file.originalname,
       createdBy: req.user.id,
