@@ -40,6 +40,24 @@ export function formatDateShort(dateStr) {
   return formatWith(DATE_SHORT, dateStr);
 }
 
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+/** "hace 5 min" / "hace 2 h" / "hace 3 d"; falls back to formatDateShort past 7 days. */
+export function formatRelativeTime(dateStr) {
+  if (!dateStr) return '—';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return '—';
+  const diff = Date.now() - date.getTime();
+
+  if (diff < MINUTE) return 'hace instantes';
+  if (diff < HOUR) return `hace ${Math.floor(diff / MINUTE)} min`;
+  if (diff < DAY) return `hace ${Math.floor(diff / HOUR)} h`;
+  if (diff < 7 * DAY) return `hace ${Math.floor(diff / DAY)} d`;
+  return formatDateShort(dateStr);
+}
+
 const CURRENCY_COP = new Intl.NumberFormat('es-CO', {
   style: 'currency',
   currency: 'COP',

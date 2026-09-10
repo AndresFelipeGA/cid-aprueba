@@ -4,9 +4,9 @@
 
 import * as API from '../api.js';
 import { state } from '../state.js';
-import { escapeHtml, formatDateShort } from '../utils/format.js';
+import { escapeHtml, formatDateShort, formatRelativeTime } from '../utils/format.js';
 import { statusBadge, statusLabel, actionLabel, stepLabel, maxStep } from '../meta.js';
-import { hrefFor } from '../router.js';
+import { hrefFor, navigate } from '../router.js';
 import { showToast } from '../ui/toast.js';
 import { setButtonBusy } from '../ui/feedback.js';
 
@@ -118,15 +118,18 @@ function buildDonutChart(byStatus) {
 // --- Horizontal bar chart (requisitions per step) ---
 
 function buildBarChart(byStep) {
-  const maxCount = Math.max(1, ...Object.values(byStep));
+  // Proportional to the total open requisitions, not to the busiest step —
+  // otherwise a single requisition fills its bar to 100% and looks like everything is done.
+  const total = Object.values(byStep).reduce((sum, c) => sum + c, 0);
   let rows = '';
   for (let step = 1; step <= maxStep(); step++) {
     const count = byStep[String(step)] || 0;
-    const pct = (count / maxCount) * 100;
+    const pct = total > 0 ? (count / total) * 100 : 0;
     const isZero = count === 0;
+    const label = stepLabel(step);
     rows += `
-      <div class="bar-row${isZero ? ' bar-row--zero' : ''}" title="${escapeHtml(stepLabel(step))}">
-        <span class="bar-label">Paso ${step}</span>
+      <div class="bar-row${isZero ? ' bar-row--zero' : ''}">
+        <span class="bar-label" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
         <div class="bar-track">
           <div class="bar-fill" data-target-pct="${pct}" style="width: 0%"></div>
         </div>
@@ -160,36 +163,73 @@ function pendingTag(requisition) {
 
 function renderPendingItem(requisition) {
   const number = requisition.number ? `<span class="req-number">${escapeHtml(requisition.number)}</span> ` : '';
+  const user = state.user;
+  const needsResubmit = requisition.status === 'returned' && user && user.role_level === 1;
+  const buttonLabel = needsResubmit ? 'Radicar nueva versión' : 'Revisar';
+  const actionParams = needsResubmit ? {} : { focus: 'approve' };
   return `
     <div class="pending-item" role="button" tabindex="0" data-action="view-requisition" data-id="${requisition.id}" aria-label="Ver requisición ${escapeHtml(requisition.number || '')} ${escapeHtml(requisition.title)}">
-      <div>
+      <div class="pending-item__body">
         <div class="pending-item__title">${number}${escapeHtml(requisition.title)} ${pendingTag(requisition)}</div>
         <div class="pending-item__meta">Radicada por ${escapeHtml(requisition.uploader_name)} — ${formatDateShort(requisition.created_at)} — ${escapeHtml(stepLabel(requisition.current_approval_level))}</div>
       </div>
-      ${statusBadge(requisition.status)}
+      <div class="pending-item__right">
+        ${statusBadge(requisition.status)}
+        <button class="btn btn--primary btn--sm" data-action="review-requisition" data-id="${requisition.id}" data-params='${escapeHtml(JSON.stringify(actionParams))}'>${escapeHtml(buttonLabel)}</button>
+      </div>
     </div>
   `;
 }
 
-// --- Recent activity ---
+// --- Recent activity (grouped by requisition, relative time, collapsed detail) ---
 
-function renderActivityItem(log) {
+function renderActivityItem(log, { compact = false } = {}) {
   const isReturn = log.action === 'returned';
   const target = isReturn && log.to_level
     ? ` <span class="activity-item__target">→ paso ${log.to_level} (${escapeHtml(stepLabel(log.to_level))})</span>`
     : '';
-  const number = log.requisition_number ? `<span class="req-number">${escapeHtml(log.requisition_number)}</span> — ` : '';
+  const number = !compact && log.requisition_number ? `<span class="req-number">${escapeHtml(log.requisition_number)}</span> — ` : '';
+  const link = compact ? '' : `<a href="${hrefFor('requisition-detail', { id: log.requisition_id })}">${number}${escapeHtml(log.requisition_title)}</a>`;
   return `
-    <div class="activity-item${isReturn ? ' activity-item--returned' : ''}">
+    <div class="activity-item${isReturn ? ' activity-item--returned' : ''}${compact ? ' activity-item--compact' : ''}">
       <div class="activity-item__text">
         <strong>${escapeHtml(log.user_name)}</strong>
         ${escapeHtml(actionLabel(log.action))}
-        <a href="${hrefFor('requisition-detail', { id: log.requisition_id })}">${number}${escapeHtml(log.requisition_title)}</a>${target}
+        ${link}${target}
         ${log.comments ? `<br><em>"${escapeHtml(log.comments)}"</em>` : ''}
       </div>
-      <div class="activity-item__time">${formatDateShort(log.created_at)}</div>
+      <div class="activity-item__time" title="${escapeHtml(formatDateShort(log.created_at))}">${escapeHtml(formatRelativeTime(log.created_at))}</div>
     </div>
   `;
+}
+
+/** Group consecutive-or-not logs by requisition, preserving overall (most-recent-first) order. */
+function groupActivityByRequisition(logs) {
+  const order = [];
+  const groups = new Map();
+  for (const log of logs) {
+    if (!groups.has(log.requisition_id)) {
+      groups.set(log.requisition_id, []);
+      order.push(log.requisition_id);
+    }
+    groups.get(log.requisition_id).push(log);
+  }
+  return order.map((id) => groups.get(id));
+}
+
+function renderActivityGroup(group) {
+  const [head, ...rest] = group;
+  let html = `<div class="activity-group">${renderActivityItem(head)}`;
+  if (rest.length > 0) {
+    html += `
+      <details class="activity-group__more">
+        <summary>${rest.length} acción${rest.length > 1 ? 'es' : ''} anterior${rest.length > 1 ? 'es' : ''} en esta requisición</summary>
+        ${rest.map((log) => renderActivityItem(log, { compact: true })).join('')}
+      </details>
+    `;
+  }
+  html += '</div>';
+  return html;
 }
 
 // --- Render ---
@@ -258,7 +298,8 @@ export async function render(container, _params, ctx) {
   if (recentActivity.length === 0) {
     html += '<div class="empty">No hay actividad reciente</div>';
   } else {
-    html += `<div class="activity-list">${recentActivity.map(renderActivityItem).join('')}</div>`;
+    const groups = groupActivityByRequisition(recentActivity);
+    html += `<div class="activity-list">${groups.map(renderActivityGroup).join('')}</div>`;
   }
   html += '</div>';
 
@@ -283,6 +324,17 @@ async function exportHistory(btn) {
   }
 }
 
+function reviewRequisition(t) {
+  let extra = {};
+  try {
+    extra = JSON.parse(t.dataset.params || '{}');
+  } catch (_err) {
+    // ignore malformed data
+  }
+  navigate('requisition-detail', { id: t.dataset.id, ...extra });
+}
+
 export const actions = {
   'export-approvals': (t) => exportHistory(t),
+  'review-requisition': (t) => reviewRequisition(t),
 };

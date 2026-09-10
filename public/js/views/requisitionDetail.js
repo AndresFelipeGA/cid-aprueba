@@ -459,14 +459,22 @@ function renderTimeline(requisition, steps, logs) {
       ? statusLabel('returned')
       : statusLabel(step.status);
 
+    // Role is shown only while nobody has acted yet (it says who this step is waiting on);
+    // once acted, the person's name + when already makes the role obvious from the step title.
+    const roleLine = !stepLog
+      ? `<div class="timeline__step-role">${escapeHtml(roleNameForStep(step.step_level, stepGender))}</div>`
+      : '';
+    const statusLine = stepLog
+      ? `${escapeHtml(statusText)} — ${escapeHtml(stepLog.user_name)} · ${formatDateShort(stepLog.created_at)}`
+      : escapeHtml(statusText);
+
     html += `
-      <li class="timeline__item ${itemClass}">
+      <li class="timeline__item ${itemClass}" title="${escapeHtml(roleNameForStep(step.step_level, stepGender))}">
         <div class="timeline__dot"></div>
         <div class="timeline__level">${escapeHtml(stepLabel(step.step_level))}</div>
-        <div class="timeline__step-role">${escapeHtml(roleNameForStep(step.step_level, stepGender))}</div>
-        <div class="timeline__status">${escapeHtml(statusText)}${stepLog ? ` — ${escapeHtml(stepLog.user_name)}` : ''}</div>
+        ${roleLine}
+        <div class="timeline__status">${statusLine}</div>
         ${stepLog && stepLog.comments ? `<div class="timeline__comment">"${escapeHtml(stepLog.comments)}"</div>` : ''}
-        ${stepLog ? `<div class="timeline__status">${formatDateShort(stepLog.created_at)}</div>` : ''}
       </li>
     `;
   }
@@ -623,6 +631,16 @@ export async function render(container, params, ctx) {
         e.preventDefault();
         handleResubmit(requisition.id);
       });
+    }
+  }
+
+  // Arrived from a "Revisar" shortcut (e.g. dashboard pending list): jump straight to the action panel
+  if (params.focus === 'approve' && canAct) {
+    const panel = $('#approval-panel');
+    if (panel) {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const comments = $('#approval-comments');
+      if (comments) comments.focus({ preventScroll: true });
     }
   }
 }

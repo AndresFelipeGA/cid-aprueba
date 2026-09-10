@@ -41,21 +41,27 @@ export function currentViewDefinition() {
   return views.get(state.view);
 }
 
-/** Parse a location hash into { view, params } or null when unknown. */
+/** Parse a location hash into { view, params } or null when unknown. Trailing `?key=value` pairs merge into params. */
 export function parseHash(hash = location.hash) {
-  const path = hash.replace(/^#/, '');
+  const [path, queryStr] = hash.replace(/^#/, '').split('?');
   for (const route of ROUTES) {
     const match = path.match(route.pattern);
     if (match) {
-      return { view: route.view, params: route.params ? route.params(match) : {} };
+      const params = route.params ? route.params(match) : {};
+      if (queryStr) Object.assign(params, Object.fromEntries(new URLSearchParams(queryStr)));
+      return { view: route.view, params };
     }
   }
   return null;
 }
 
+/** Extra params not consumed by the route's own path builder are appended as a query string. */
 export function hrefFor(view, params = {}) {
   const build = PATHS[view];
-  return build ? `#${build(params)}` : DEFAULT_HASH;
+  if (!build) return DEFAULT_HASH;
+  let href = `#${build(params)}`;
+  if (params.focus) href += `?focus=${encodeURIComponent(params.focus)}`;
+  return href;
 }
 
 /**

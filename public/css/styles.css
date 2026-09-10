@@ -13,6 +13,10 @@
   --color-text-light: #666666;
   --color-border: #E0D8CC;
   --color-danger: #B22222;
+  /* Same colour as --color-accent/--color-primary by default; only the dark theme
+     lightens these, for the few places where the hue is used as TEXT rather than a filled background. */
+  --color-accent-text: var(--color-accent);
+  --color-in-review-text: #a04820;
 
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --radius: 6px;
@@ -334,16 +338,30 @@ textarea.form__input {
   padding: 0 28px;
 }
 
+.header__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
 .header__title {
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--color-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header__user {
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-shrink: 0;
 }
 
 .header__user-info {
@@ -482,6 +500,10 @@ textarea.form__input {
   background: #faf8f5;
 }
 
+.nowrap {
+  white-space: nowrap;
+}
+
 .table td {
   padding: 12px 16px;
   border-bottom: 1px solid var(--color-border);
@@ -523,12 +545,12 @@ textarea.form__input {
 
 .badge--in_review {
   background-color: rgba(200, 90, 42, 0.15);
-  color: #a04820;
+  color: var(--color-in-review-text);
 }
 
 .badge--approved {
   background-color: rgba(107, 142, 35, 0.12);
-  color: var(--color-accent);
+  color: var(--color-accent-text);
 }
 
 .badge--rejected {
@@ -581,9 +603,18 @@ textarea.form__input {
 .req-detail__meta li {
   display: flex;
   justify-content: space-between;
+  gap: 16px;
   padding: 8px 0;
   border-bottom: 1px solid var(--color-border);
   font-size: 0.875rem;
+}
+
+.req-detail__meta-label {
+  flex-shrink: 0;
+}
+
+.req-detail__meta-value {
+  text-align: right;
 }
 
 .req-detail__meta li:last-child {
@@ -928,6 +959,51 @@ textarea.form__input {
   flex-shrink: 0;
 }
 
+/* --- Activity groups: one card per requisition, older entries collapsed --- */
+.activity-group {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.activity-group:last-child {
+  border-bottom: none;
+}
+
+.activity-group .activity-item {
+  border-bottom: none;
+}
+
+.activity-group__more {
+  padding: 0 20px 12px 44px;
+}
+
+.activity-group__more summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--color-text-light);
+  list-style: none;
+}
+
+.activity-group__more summary::-webkit-details-marker {
+  display: none;
+}
+
+.activity-group__more summary::before {
+  content: '▸ ';
+}
+
+.activity-group__more[open] summary::before {
+  content: '▾ ';
+}
+
+.activity-group__more .activity-item {
+  padding: 8px 0 0 0;
+  font-size: 0.8125rem;
+}
+
+.activity-item--compact .activity-item__text {
+  color: var(--color-text-light);
+}
+
 /* --- Pending List --- */
 .pending-list {
   background: var(--color-surface);
@@ -940,10 +1016,23 @@ textarea.form__input {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   padding: 14px 20px;
   border-bottom: 1px solid var(--color-border);
   cursor: pointer;
   transition: background-color var(--transition);
+}
+
+.pending-item__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.pending-item__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .pending-item:hover {
@@ -1023,14 +1112,21 @@ textarea.form__input {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.875rem;
-  color: var(--color-text-light);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 6px 14px;
   margin-bottom: 20px;
-  transition: color var(--transition);
+  transition: background-color var(--transition), border-color var(--transition), color var(--transition);
 }
 
 .back-link:hover {
   color: var(--color-primary);
+  border-color: var(--color-primary);
+  background-color: rgba(200, 90, 42, 0.04);
 }
 
 /* --- Mobile Menu Toggle --- */
@@ -1217,8 +1313,39 @@ textarea.form__input {
 }
 
 @media (max-width: 480px) {
+  /* Keep a 2x2 grid instead of stacking 4 full-width cards before any useful content shows */
   .stats {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .stat-card {
+    padding: 14px 16px;
+  }
+
+  .stat-card__value {
+    font-size: 1.5rem;
+  }
+
+  .header {
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  /* Give the page title room to fit on one line; the logout button alone is enough identity on this size */
+  .header__user-info {
+    display: none;
+  }
+
+  /* Long labels ("Cotización seleccionada") and their values no longer sit pressed against each other */
+  .req-detail__meta li {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .req-detail__meta-value {
+    text-align: left;
   }
 
   .login::before {
@@ -1386,7 +1513,7 @@ textarea.form__input {
 }
 
 .quotation-card__doc-status--complete {
-  color: var(--color-accent);
+  color: var(--color-accent-text);
 }
 
 .quotation-card__doc-status--missing {
@@ -2424,13 +2551,16 @@ textarea.form__input {
 }
 
 .bar-label {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--color-text-light);
   font-weight: 500;
-  width: 48px;
+  width: 108px;
   flex-shrink: 0;
   text-align: right;
   letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bar-track {
@@ -2550,6 +2680,10 @@ body,
   --color-text: #e0e0e0;
   --color-text-light: #a0a0a0;
   --color-border: #2a2a4a;
+  /* Only for accent/primary used as TEXT (not as a button/dot background, which keep --color-accent/--color-primary
+     since those still contrast fine with the white text/fill used there) */
+  --color-accent-text: #8BC34A;
+  --color-in-review-text: #F0955A;
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
@@ -2698,6 +2832,11 @@ body,
 
 [data-theme="dark"] .quotation-card__file {
   background: #1e2a4a;
+}
+
+/* The unfilled ring was barely visible: dark border on an already-dark card surface */
+[data-theme="dark"] .timeline__item--pending .timeline__dot {
+  border-color: #4a5578;
 }
 
 [data-theme="dark"] .quotation-warning {

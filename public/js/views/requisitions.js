@@ -110,7 +110,7 @@ export async function render(container, _params, ctx) {
       { header: 'Estado', render: (req) => statusBadge(req.status) },
       { header: 'Progreso', render: buildProgressBar },
       { header: 'Radicada por', render: (req) => escapeHtml(req.uploader_name) },
-      { header: 'Fecha', render: (req) => formatDateShort(req.created_at) },
+      { header: 'Fecha', render: (req) => `<span class="nowrap">${formatDateShort(req.created_at)}</span>` },
     ],
     rowAttrs: (req) =>
       `class="table__row--clickable" role="button" tabindex="0" data-action="view-requisition" data-id="${req.id}" aria-label="Ver requisición ${escapeHtml(req.number || '')} ${escapeHtml(req.title)}"`,
