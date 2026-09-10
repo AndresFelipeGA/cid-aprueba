@@ -137,6 +137,26 @@ export function getRequisitions(page = 1, limit = 50) {
   return request('GET', `/requisitions?page=${page}&limit=${limit}`);
 }
 
+/**
+ * Fetches every requisition visible to the user, paging through the backend's
+ * max page size. The list view filters/searches client-side over the full set,
+ * so a single capped page (e.g. 50) would hide anything beyond it.
+ */
+export async function getAllRequisitions() {
+  const limit = 100;
+  let page = 1;
+  let items = [];
+  let total = Infinity;
+  while (items.length < total) {
+    const res = await request('GET', `/requisitions?page=${page}&limit=${limit}`);
+    items = items.concat(res.data.items);
+    total = res.data.total;
+    if (res.data.items.length < limit) break;
+    page += 1;
+  }
+  return { data: { items, total } };
+}
+
 export function getRequisition(id) {
   return request('GET', `/requisitions/${id}`);
 }

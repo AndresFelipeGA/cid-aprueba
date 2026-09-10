@@ -49,7 +49,7 @@ export function buildProgressBar(req) {
 }
 
 export async function render(container, _params, ctx) {
-  const result = await API.getRequisitions();
+  const result = await API.getAllRequisitions();
   if (ctx.isStale()) return;
   const requisitions = result.data.items || [];
 

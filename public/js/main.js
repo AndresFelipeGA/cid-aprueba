@@ -9,6 +9,7 @@ import { registerView, currentViewDefinition, startRouter, handleRoute, navigate
 import { showToast } from './ui/toast.js';
 import { initModals, openModal, closeModal } from './ui/modal.js';
 import { initTheme } from './ui/theme.js';
+import { playSplash } from './ui/splash.js';
 import { updateHeaderUser, updateSidebarVisibility, toggleMobileSidebar, closeMobileSidebar } from './ui/header.js';
 import { setFeedback, setButtonBusy } from './ui/feedback.js';
 import { updateBadges, startBadgePolling, stopBadgePolling } from './badges.js';
@@ -130,7 +131,10 @@ async function handleLogin(e) {
   try {
     const result = await API.login(username, password);
     setUser(result.data.user);
+    // The splash covers the screen while the dashboard renders underneath it
+    const splash = playSplash(state.user);
     showApp();
+    await splash;
   } catch (err) {
     errorEl.textContent = err.message || 'Error al iniciar sesión';
     errorEl.classList.remove('hidden');
