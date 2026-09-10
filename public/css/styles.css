@@ -349,23 +349,23 @@ img {
   background: var(--color-surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  padding: 69px 60px;
+  padding: 52px 45px;
   width: 100%;
-  max-width: 598px;
+  max-width: 449px;
   position: relative;
   z-index: 1;
 }
 
 .login__brand {
   text-align: center;
-  margin-bottom: 46px;
+  margin-bottom: 35px;
 }
 
 .login__logo-img {
   display: block;
-  max-width: 309px;
+  max-width: 232px;
   height: auto;
-  margin: 0 auto 14px;
+  margin: 0 auto 11px;
 }
 
 .login__error {
@@ -1540,11 +1540,11 @@ textarea.form__input {
   }
 
   .login__card {
-    padding: 48px 37px;
+    padding: 36px 28px;
   }
 
   .login__logo-img {
-    max-width: 240px;
+    max-width: 180px;
   }
 
   .modal__content {
