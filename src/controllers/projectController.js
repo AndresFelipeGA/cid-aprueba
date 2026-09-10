@@ -27,7 +27,7 @@ const projectController = {
   },
 
   /**
-   * Create a new project. Any authenticated user can create.
+   * Create a new project. Roles allowed are enforced in routes/projects.js.
    * @param {Object} req - Express request
    * @param {Object} res - Express response
    */

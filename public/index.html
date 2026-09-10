@@ -13,7 +13,8 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="css/styles.css?v=23">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-LA-CID.svg">
+  <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
@@ -60,21 +61,21 @@
         <span class="theme-toggle__label" id="theme-label">Claro</span>
       </div>
       <nav class="sidebar__nav">
-        <a href="#" class="sidebar__link sidebar__link--active" data-action="navigate" data-view="dashboard">
+        <a href="#/dashboard" class="sidebar__link sidebar__link--active" data-view="dashboard">
           Panel de Control
           <span class="sidebar__badge sidebar__badge--hidden" id="badge-dashboard"></span>
         </a>
-        <a href="#" class="sidebar__link" data-action="navigate" data-view="requisitions">
+        <a href="#/requisitions" class="sidebar__link" data-view="requisitions">
           Requisiciones
           <span class="sidebar__badge sidebar__badge--hidden" id="badge-requisitions"></span>
         </a>
-        <a href="#" class="sidebar__link" id="nav-create-requisition" data-action="navigate" data-view="create-requisition">
+        <a href="#/create" class="sidebar__link" id="nav-create-requisition" data-view="create-requisition">
           Crear Requisición
         </a>
-        <a href="#" class="sidebar__link" data-action="navigate" data-view="profile">
+        <a href="#/profile" class="sidebar__link" data-view="profile">
           Perfil
         </a>
-        <a href="#" class="sidebar__link hidden" id="nav-users" data-action="navigate" data-view="users">
+        <a href="#/users" class="sidebar__link hidden" id="nav-users" data-view="users">
           Gestión de Usuarios
         </a>
       </nav>
@@ -196,9 +197,19 @@
     </div>
   </div>
 
+  <!-- ========== Confirmation Dialog (replaces window.confirm) ========== -->
+  <dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-dialog-message">
+    <form method="dialog">
+      <p class="modal__text" id="confirm-dialog-message"></p>
+      <div class="modal__actions">
+        <button class="btn btn--outline" type="submit" value="cancel">Cancelar</button>
+        <button class="btn btn--primary" type="submit" value="confirm" id="confirm-dialog-accept">Aceptar</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Scripts -->
-  <script src="js/api.js?v=23"></script>
-  <script src="js/app.js?v=23"></script>
+  <script type="module" src="js/main.js"></script>
 
 </body>
 </html>

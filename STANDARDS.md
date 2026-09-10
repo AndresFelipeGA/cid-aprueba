@@ -85,7 +85,7 @@ if (!requisition) {
   throw new AppError('Requisition not found', 404, 'REQUISITION_NOT_FOUND');
 }
 
-if (user.role_level !== requisition.current_approval_level) {
+if (user.role_level !== STEP_TO_ROLE_MAP[requisition.current_approval_level]) {
   throw new AppError('Not authorized to approve at this level', 403, 'FORBIDDEN');
 }
 ```
@@ -505,9 +505,11 @@ Use a lightweight testing setup appropriate for the project scale:
 
 ```
 tests/
-├── auth.test.js          # Login, registration, token validation
-├── requisitions.test.js  # Upload, list, detail, download
-└── approvals.test.js     # Approve, reject, workflow progression
+├── helpers.js            # Bootstrap: temp DB + upload dir, login/as() helpers
+├── auth.test.js          # Login, token validation, rate limiting
+└── workflow.test.js      # Visibility rule, full 7-step chain, rejection
+
+Run with `npm test` (node --test + supertest). CI runs it on every push (.github/workflows/ci.yml).
 ```
 
 ### Testing Priorities

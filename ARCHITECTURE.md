@@ -72,8 +72,9 @@ cid-aprueba/
 │
 ├── src/
 │   ├── config/
-│   │   ├── database.js        # sql.js persistent wrapper and initialization
+│   │   ├── database.js        # sql.js persistent wrapper (debounced save, re-entrant transactions)
 │   │   ├── auth.js            # JWT secret, token expiry settings
+│   │   ├── workflow.js        # Single source of truth: step→role map, labels, doc types (served at /api/meta)
 │   │   └── migrations/        # Database migration files
 │   │       ├── index.js       # Migration runner
 │   │       ├── 001_initial_schema.js  # Initial 6-table schema
@@ -82,9 +83,12 @@ cid-aprueba/
 │   │
 │   ├── middleware/
 │   │   ├── authenticate.js    # JWT verification middleware
-│   │   ├── authorize.js       # Role-based access control
-│   │   ├── errorHandler.js    # Centralized error handling
-│   │   └── validate.js        # Request validation wrapper
+│   │   ├── authorize.js       # Role-based access control (applied in routes, e.g. authorize(3))
+│   │   ├── errorHandler.js    # Centralized error handling; maps multer errors, deletes orphaned uploads
+│   │   ├── quotationStage.js  # Guards for quotation mutations (step 4 pending, ownership chain)
+│   │   ├── upload.js          # Shared multer factory (extension whitelist, size limit, UTF-8 names)
+│   │   ├── validate.js        # express-validator result → 400 VALIDATION_ERROR
+│   │   └── validators.js      # Reusable chains: idParam(), pagination, statusParam, getPagination()
 │   │
 │   ├── models/
 │   │   ├── User.js            # User CRUD and queries
@@ -445,9 +449,9 @@ sequenceDiagram
 | Rule | Implementation |
 |------|---------------|
 | **View dashboard metrics** | All authenticated users |
-| **View requisition list** | All authenticated users see metadata; detail access restricted by level |
-| **Open requisition detail** | User role_level must be ≤ requisition current_approval_level |
-| **Approve/Reject** | User role_level must equal requisition current_approval_level |
+| **View requisition list** | Filtered by `Requisition.findAll` / `findByStatus`: a requisition is visible once `current_approval_level` ≥ the lowest step assigned to the user's role, or once it is `approved`/`rejected` |
+| **Open requisition detail / download / history / quotations** | Same visibility rule, enforced by `loadVisibleRequisition` in `requisitionController.js` (403 otherwise) |
+| **Approve/Reject** | `STEP_TO_ROLE_MAP[current_approval_level]` must equal the user's role_level (role 3 acts at steps 3 and 5) |
 | **Upload requisition** | Coordinadores de Territorio (role_level = 1) only |
 | **Manage users** | Representante Legal (role_level = 3) only — see Section 7.1 |
 

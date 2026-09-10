@@ -1,7 +1,40 @@
 const db = require('../config/database');
 const Quotation = require('./Quotation');
 
+const FINAL_STATUSES = ['approved', 'rejected'];
+
+/**
+ * Lowest workflow step a role participates in. A user may see a requisition
+ * once it has reached that step, or once the workflow has finished.
+ * @param {number} roleLevel
+ * @returns {number}
+ */
+const minStepForRole = (roleLevel) => {
+  const { STEP_TO_ROLE_MAP } = require('./ApprovalStep');
+  const steps = Object.entries(STEP_TO_ROLE_MAP)
+    .filter(([, role]) => role === roleLevel)
+    .map(([step]) => parseInt(step, 10));
+  return steps.length ? Math.min(...steps) : Infinity;
+};
+
+/** SQL fragment + params implementing the visibility rule for a role. */
+const visibilityClause = (roleLevel, alias = '') => ({
+  sql: `(${alias}current_approval_level >= ? OR ${alias}status IN ('approved', 'rejected'))`,
+  params: [minStepForRole(roleLevel)],
+});
+
 const Requisition = {
+  /**
+   * Whether a user may view a requisition (same rule as list filtering).
+   * @param {object} requisition
+   * @param {{ role_level: number }} user
+   * @returns {boolean}
+   */
+  isVisibleTo(requisition, user) {
+    return FINAL_STATUSES.includes(requisition.status)
+      || requisition.current_approval_level >= minStepForRole(user.role_level);
+  },
+
   findById(id) {
     return db.prepare(`
       SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username,
@@ -22,55 +55,54 @@ const Requisition = {
       LEFT JOIN projects p ON r.project_id = p.id
     `;
     const params = [];
+    let countQuery = 'SELECT COUNT(*) as total FROM requisitions';
+    const countParams = [];
 
     if (userRoleLevel) {
-      const { STEP_TO_ROLE_MAP } = require('./ApprovalStep');
-      const minStep = Math.min(
-        ...Object.entries(STEP_TO_ROLE_MAP)
-          .filter(([_, role]) => role === userRoleLevel)
-          .map(([step]) => parseInt(step, 10)),
-      );
-      query += ' WHERE r.current_approval_level >= ? OR r.status IN (\'approved\', \'rejected\')';
-      params.push(minStep);
+      const vis = visibilityClause(userRoleLevel, 'r.');
+      query += ` WHERE ${vis.sql}`;
+      params.push(...vis.params);
+      countQuery += ` WHERE ${visibilityClause(userRoleLevel).sql}`;
+      countParams.push(...vis.params);
     }
 
     query += ' ORDER BY r.created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
     const items = db.prepare(query).all(...params);
-
-    let countQuery = 'SELECT COUNT(*) as total FROM requisitions';
-    const countParams = [];
-    if (userRoleLevel) {
-      const { STEP_TO_ROLE_MAP } = require('./ApprovalStep');
-      const minStep = Math.min(
-        ...Object.entries(STEP_TO_ROLE_MAP)
-          .filter(([_, role]) => role === userRoleLevel)
-          .map(([step]) => parseInt(step, 10)),
-      );
-      countQuery += ' WHERE current_approval_level >= ? OR status IN (\'approved\', \'rejected\')';
-      countParams.push(minStep);
-    }
     const { total } = db.prepare(countQuery).get(...countParams);
 
     return { items, total };
   },
 
-  findByStatus(status, { limit = 20, offset = 0 } = {}) {
+  findByStatus(status, { limit = 20, offset = 0, userRoleLevel } = {}) {
+    let where = 'r.status = ?';
+    const params = [status];
+    let countWhere = 'status = ?';
+    const countParams = [status];
+
+    if (userRoleLevel) {
+      const vis = visibilityClause(userRoleLevel, 'r.');
+      where += ` AND ${vis.sql}`;
+      params.push(...vis.params);
+      countWhere += ` AND ${visibilityClause(userRoleLevel).sql}`;
+      countParams.push(...vis.params);
+    }
+
     const items = db.prepare(`
       SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username,
              p.name AS project_name, p.code AS project_code
       FROM requisitions r
       JOIN users u ON r.uploaded_by = u.id
       LEFT JOIN projects p ON r.project_id = p.id
-      WHERE r.status = ?
+      WHERE ${where}
       ORDER BY r.created_at DESC
       LIMIT ? OFFSET ?
-    `).all(status, limit, offset);
+    `).all(...params, limit, offset);
 
     const { total } = db.prepare(
-      'SELECT COUNT(*) as total FROM requisitions WHERE status = ?',
-    ).get(status);
+      `SELECT COUNT(*) as total FROM requisitions WHERE ${countWhere}`,
+    ).get(...countParams);
 
     return { items, total };
   },
@@ -191,13 +223,6 @@ const Requisition = {
     `).get(...matchingSteps);
 
     return { items, total };
-  },
-
-  /**
-   * @deprecated Use findPendingForRole() instead — kept for backward compatibility
-   */
-  findPendingForLevel(roleLevel, { limit = 20, offset = 0 } = {}) {
-    return Requisition.findPendingForRole(roleLevel, { limit, offset });
   },
 
   findRecent({ limit = 10 } = {}) {

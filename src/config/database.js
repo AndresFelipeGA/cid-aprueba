@@ -36,6 +36,7 @@ if (!fs.existsSync(dbDir)) {
 
 let SQL;   // sql.js module
 let rawDb; // the underlying sql.js Database instance
+let _txDepth = 0; // nesting depth of db.transaction()
 
 /**
  * Wrap a sql.js Database so callers can use the better-sqlite3 style:
@@ -81,6 +82,7 @@ const db = {
         const lastInsertRowid = lastId.length > 0 && lastId[0].values.length > 0
           ? lastId[0].values[0][0]
           : 0;
+        _scheduleSave();
         return { changes, lastInsertRowid };
       },
     };
@@ -88,6 +90,7 @@ const db = {
 
   exec(sql) {
     rawDb.run(sql);
+    _scheduleSave();
   },
 
   /**
@@ -104,15 +107,31 @@ const db = {
     }
   },
 
+  /**
+   * Wrap fn in a transaction. Re-entrant: a transaction opened inside another
+   * simply joins the outer one (SQLite has no nested BEGIN). Returns fn's result.
+   */
   transaction(fn) {
     return (...args) => {
+      if (_txDepth > 0) {
+        _txDepth++;
+        try {
+          return fn(...args);
+        } finally {
+          _txDepth--;
+        }
+      }
+
       rawDb.run('BEGIN TRANSACTION');
+      _txDepth = 1;
       try {
-        fn(...args);
+        const result = fn(...args);
         rawDb.run('COMMIT');
-        // Persist to disk after transaction
-        _saveToDisk();
+        _txDepth = 0;
+        _saveToDisk(); // Persist immediately after a committed transaction
+        return result;
       } catch (err) {
+        _txDepth = 0;
         rawDb.run('ROLLBACK');
         throw err;
       }
@@ -122,15 +141,18 @@ const db = {
 
 // ── Persistence helpers ────────────────────────────────────────────────────
 
-let _saving = false;
+let _pendingSave = null;
+const SAVE_DEBOUNCE_MS = 1_000;
 
 /**
  * Persist the in-memory database to the file on disk using atomic writes.
  * Writes to a temp file first, then renames to prevent corruption.
  */
 function _saveToDisk() {
-  if (_saving) return;
-  _saving = true;
+  if (_pendingSave) {
+    clearTimeout(_pendingSave);
+    _pendingSave = null;
+  }
   try {
     const data = rawDb.export();
     const buffer = Buffer.from(data);
@@ -139,9 +161,18 @@ function _saveToDisk() {
     fs.renameSync(tmpPath, dbPath);
   } catch (err) {
     logger.error('Failed to persist database to disk', { stack: err.stack });
-  } finally {
-    _saving = false;
   }
+}
+
+/**
+ * Schedule a save shortly after any write, so a crash loses at most
+ * SAVE_DEBOUNCE_MS of committed data instead of the full auto-save interval.
+ * Writes inside an open transaction are persisted by the transaction itself.
+ */
+function _scheduleSave() {
+  if (_pendingSave || !rawDb) return;
+  _pendingSave = setTimeout(_saveToDisk, SAVE_DEBOUNCE_MS);
+  _pendingSave.unref();
 }
 
 // ── Auto-save ──────────────────────────────────────────────────────────────

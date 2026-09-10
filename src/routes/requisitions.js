@@ -1,94 +1,45 @@
-const path = require('path');
-const fs = require('fs');
 const express = require('express');
-const multer = require('multer');
 const { body } = require('express-validator');
 const requisitionController = require('../controllers/requisitionController');
 const authenticate = require('../middleware/authenticate');
+const authorize = require('../middleware/authorize');
 const validate = require('../middleware/validate');
 const asyncHandler = require('../middleware/asyncHandler');
-const AppError = require('../utils/AppError');
-const config = require('../config/env');
+const { idParam, pagination, statusParam } = require('../middleware/validators');
+const { createUploader, fixUploadFilename } = require('../middleware/upload');
 
 const router = express.Router();
+const upload = createUploader();
 
-// Ensure uploads directory exists
-const uploadDir = path.resolve(__dirname, '../../', config.uploadDir);
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+const COORDINATOR = 1; // Coordinador/a de Territorio
 
-// Allowed file extensions
-const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png'];
-
-// Multer configuration
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${uniqueSuffix}${ext}`);
-  },
-});
-
-const fileFilter = (_req, file, cb) => {
-  const ext = path.extname(file.originalname).toLowerCase();
-  if (ALLOWED_EXTENSIONS.includes(ext)) {
-    cb(null, true);
-  } else {
-    cb(new AppError(
-      `Tipo de archivo no permitido. Tipos aceptados: ${ALLOWED_EXTENSIONS.join(', ')}`,
-      400,
-      'INVALID_FILE_TYPE',
-    ));
-  }
-};
-
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: config.maxFileSize,
-  },
-});
-
-// Middleware to fix multer filename encoding (Latin-1 → UTF-8)
-const fixUploadFilename = (req, res, next) => {
-  if (req.file && req.file.originalname) {
-    try {
-      req.file.originalname = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
-    } catch (e) {
-      // Keep original if conversion fails
-    }
-  }
-  next();
-};
+router.use(authenticate);
 
 // GET /api/requisitions
+router.get('/', pagination, validate, asyncHandler(requisitionController.list));
+
+// GET /api/requisitions/status/:status  (declared before /:id so "status" is not parsed as an id)
 router.get(
-  '/',
-  authenticate,
-  asyncHandler(requisitionController.list),
+  '/status/:status',
+  [statusParam, ...pagination],
+  validate,
+  asyncHandler(requisitionController.getByStatus),
 );
 
 // GET /api/requisitions/:id
-router.get(
-  '/:id',
-  authenticate,
-  asyncHandler(requisitionController.getById),
-);
+router.get('/:id', [idParam()], validate, asyncHandler(requisitionController.getById));
 
 // POST /api/requisitions
 router.post(
   '/',
-  authenticate,
+  authorize(COORDINATOR),
   upload.single('file'),
   fixUploadFilename,
   [
-    body('title').trim().notEmpty().withMessage('El título es requerido').isLength({ max: 255 }).withMessage('El título debe tener máximo 255 caracteres'),
-    body('description').optional().trim().isLength({ max: 1000 }).withMessage('La descripción debe tener máximo 1000 caracteres'),
+    body('title').trim().notEmpty().withMessage('El título es requerido')
+      .isLength({ max: 255 }).withMessage('El título debe tener máximo 255 caracteres'),
+    body('description').optional().trim().isLength({ max: 1000 })
+      .withMessage('La descripción debe tener máximo 1000 caracteres'),
     body('project_id').optional().isInt({ min: 1 }).withMessage('El ID del proyecto debe ser un número entero válido'),
   ],
   validate,
@@ -96,17 +47,6 @@ router.post(
 );
 
 // GET /api/requisitions/:id/download
-router.get(
-  '/:id/download',
-  authenticate,
-  asyncHandler(requisitionController.download),
-);
-
-// GET /api/requisitions/status/:status
-router.get(
-  '/status/:status',
-  authenticate,
-  asyncHandler(requisitionController.getByStatus),
-);
+router.get('/:id/download', [idParam()], validate, asyncHandler(requisitionController.download));
 
 module.exports = router;

@@ -2,13 +2,15 @@ const express = require('express');
 const { body, param } = require('express-validator');
 const userController = require('../controllers/userController');
 const authenticate = require('../middleware/authenticate');
+const authorize = require('../middleware/authorize');
 const validate = require('../middleware/validate');
 const asyncHandler = require('../middleware/asyncHandler');
+const { ADMIN_ROLE } = require('../config/workflow');
 
 const router = express.Router();
 
-// All routes require authentication
-router.use(authenticate);
+// User management is restricted to the Representante Legal (role 3)
+router.use(authenticate, authorize(ADMIN_ROLE));
 
 // GET /api/users — List all users
 router.get(
@@ -30,8 +32,7 @@ router.post(
       .isEmail().withMessage('Invalid email format')
       .normalizeEmail(),
     body('password')
-      .notEmpty().withMessage('Password is required')
-      .isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+      .isLength({ min: 8, max: 72 }).withMessage('Password must be between 8 and 72 characters'),
     body('full_name')
       .trim()
       .notEmpty().withMessage('Full name is required'),
@@ -86,8 +87,7 @@ router.put(
   [
     param('id').isInt().withMessage('Invalid user ID'),
     body('password')
-      .notEmpty().withMessage('Password is required')
-      .isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+      .isLength({ min: 8, max: 72 }).withMessage('Password must be between 8 and 72 characters'),
   ],
   validate,
   asyncHandler(userController.resetPassword),

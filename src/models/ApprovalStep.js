@@ -1,22 +1,7 @@
 const db = require('../config/database');
 
-/**
- * Maps each workflow step_level to the required user role_level.
- * Role level 3 (Representante Legal) appears at both step 3 and step 5.
- * @type {Object<number, number>}
- */
-const STEP_TO_ROLE_MAP = {
-  1: 1, // Coordinador/a de Territorio
-  2: 2, // Director/a Programática
-  3: 3, // Representante Legal (primera vez)
-  4: 4, // Encargado/a de Compras
-  5: 3, // Representante Legal (segunda vez — selecciona cotización)
-  6: 5, // Área Financiera
-  7: 6, // Área de Compras
-};
-
-/** Maximum step level in the approval workflow */
-const MAX_STEP_LEVEL = 7;
+// Step→role mapping lives in config/workflow.js (shared with the frontend via /api/meta)
+const { STEP_TO_ROLE_MAP, MAX_STEP_LEVEL } = require('../config/workflow');
 
 const ApprovalStep = {
   findByRequisition(requisitionId) {

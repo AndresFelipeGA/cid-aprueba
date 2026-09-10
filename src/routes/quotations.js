@@ -1,78 +1,27 @@
-const path = require('path');
-const fs = require('fs');
 const express = require('express');
-const multer = require('multer');
-const { body, param } = require('express-validator');
+const { body } = require('express-validator');
 const quotationController = require('../controllers/quotationController');
 const authenticate = require('../middleware/authenticate');
+const authorize = require('../middleware/authorize');
 const validate = require('../middleware/validate');
 const asyncHandler = require('../middleware/asyncHandler');
-const AppError = require('../utils/AppError');
-const config = require('../config/env');
+const { idParam } = require('../middleware/validators');
+const { createUploader, fixUploadFilename } = require('../middleware/upload');
+const { requireQuotationStage, loadQuotation, loadDocument } = require('../middleware/quotationStage');
+const { QUOTATION_DOC_TYPES } = require('../config/workflow');
 
 const router = express.Router();
+const upload = createUploader('quotations');
 
-// Ensure quotations upload directory exists
-const quotationsUploadDir = path.resolve(__dirname, '../../uploads/quotations');
-if (!fs.existsSync(quotationsUploadDir)) {
-  fs.mkdirSync(quotationsUploadDir, { recursive: true });
-}
+const DOC_TYPES = Object.keys(QUOTATION_DOC_TYPES);
+const PURCHASING = 4; // Encargado/a de Compras
 
-// Allowed file extensions (same as requisitions)
-const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png'];
-
-// Multer configuration
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, quotationsUploadDir);
-  },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${uniqueSuffix}${ext}`);
-  },
-});
-
-const fileFilter = (_req, file, cb) => {
-  const ext = path.extname(file.originalname).toLowerCase();
-  if (ALLOWED_EXTENSIONS.includes(ext)) {
-    cb(null, true);
-  } else {
-    cb(new AppError(
-      `Tipo de archivo no permitido. Tipos aceptados: ${ALLOWED_EXTENSIONS.join(', ')}`,
-      400,
-      'INVALID_FILE_TYPE',
-    ));
-  }
-};
-
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: config.maxFileSize,
-  },
-});
-
-// Middleware to fix multer filename encoding (Latin-1 → UTF-8)
-const fixUploadFilename = (req, res, next) => {
-  if (req.file && req.file.originalname) {
-    try {
-      req.file.originalname = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
-    } catch (e) {
-      // Keep original if conversion fails
-    }
-  }
-  next();
-};
+router.use(authenticate);
 
 // GET /api/requisitions/:requisitionId/quotations
 router.get(
   '/:requisitionId/quotations',
-  authenticate,
-  [
-    param('requisitionId').isInt().withMessage('El ID de requisición debe ser un número entero'),
-  ],
+  [idParam('requisitionId')],
   validate,
   asyncHandler(quotationController.listQuotations),
 );
@@ -80,79 +29,76 @@ router.get(
 // POST /api/requisitions/:requisitionId/quotations
 router.post(
   '/:requisitionId/quotations',
-  authenticate,
+  authorize(PURCHASING),
   upload.single('file'),
   fixUploadFilename,
   [
-    param('requisitionId').isInt().withMessage('El ID de requisición debe ser un número entero'),
-    body('provider_name').trim().notEmpty().withMessage('El nombre del proveedor es requerido').isLength({ min: 2 }).withMessage('El nombre del proveedor debe tener al menos 2 caracteres'),
+    idParam('requisitionId'),
+    body('provider_name').trim().isLength({ min: 2, max: 255 })
+      .withMessage('El nombre del proveedor debe tener entre 2 y 255 caracteres'),
   ],
   validate,
+  requireQuotationStage,
   asyncHandler(quotationController.createQuotation),
 );
 
 // DELETE /api/requisitions/:requisitionId/quotations/:quotationId
 router.delete(
   '/:requisitionId/quotations/:quotationId',
-  authenticate,
-  [
-    param('requisitionId').isInt().withMessage('El ID de requisición debe ser un número entero'),
-    param('quotationId').isInt().withMessage('El ID de cotización debe ser un número entero'),
-  ],
+  authorize(PURCHASING),
+  [idParam('requisitionId'), idParam('quotationId')],
   validate,
+  requireQuotationStage,
+  loadQuotation,
   asyncHandler(quotationController.deleteQuotation),
 );
 
 // POST /api/requisitions/:requisitionId/quotations/:quotationId/documents
 router.post(
   '/:requisitionId/quotations/:quotationId/documents',
-  authenticate,
+  authorize(PURCHASING),
   upload.single('file'),
   fixUploadFilename,
   [
-    param('requisitionId').isInt().withMessage('El ID de requisición debe ser un número entero'),
-    param('quotationId').isInt().withMessage('El ID de cotización debe ser un número entero'),
-    body('doc_type').trim().notEmpty().withMessage('El tipo de documento es requerido').isIn(['rut', 'camara_comercio', 'cedula', 'certificado_bancario']).withMessage('Tipo de documento inválido. Debe ser: rut, camara_comercio, cedula o certificado_bancario'),
+    idParam('requisitionId'),
+    idParam('quotationId'),
+    body('doc_type').trim().isIn(DOC_TYPES)
+      .withMessage(`Tipo de documento inválido. Debe ser uno de: ${DOC_TYPES.join(', ')}`),
   ],
   validate,
+  requireQuotationStage,
+  loadQuotation,
   asyncHandler(quotationController.uploadDocument),
 );
 
 // DELETE /api/requisitions/:requisitionId/quotations/:quotationId/documents/:documentId
 router.delete(
   '/:requisitionId/quotations/:quotationId/documents/:documentId',
-  authenticate,
-  [
-    param('requisitionId').isInt().withMessage('El ID de requisición debe ser un número entero'),
-    param('quotationId').isInt().withMessage('El ID de cotización debe ser un número entero'),
-    param('documentId').isInt().withMessage('El ID de documento debe ser un número entero'),
-  ],
+  authorize(PURCHASING),
+  [idParam('requisitionId'), idParam('quotationId'), idParam('documentId')],
   validate,
+  requireQuotationStage,
+  loadQuotation,
+  loadDocument,
   asyncHandler(quotationController.deleteDocument),
 );
 
 // GET /api/requisitions/:requisitionId/quotations/:quotationId/download
 router.get(
   '/:requisitionId/quotations/:quotationId/download',
-  authenticate,
-  [
-    param('requisitionId').isInt().withMessage('El ID de requisición debe ser un número entero'),
-    param('quotationId').isInt().withMessage('El ID de cotización debe ser un número entero'),
-  ],
+  [idParam('requisitionId'), idParam('quotationId')],
   validate,
+  loadQuotation,
   asyncHandler(quotationController.downloadQuotationFile),
 );
 
 // GET /api/requisitions/:requisitionId/quotations/:quotationId/documents/:documentId/download
 router.get(
   '/:requisitionId/quotations/:quotationId/documents/:documentId/download',
-  authenticate,
-  [
-    param('requisitionId').isInt().withMessage('El ID de requisición debe ser un número entero'),
-    param('quotationId').isInt().withMessage('El ID de cotización debe ser un número entero'),
-    param('documentId').isInt().withMessage('El ID de documento debe ser un número entero'),
-  ],
+  [idParam('requisitionId'), idParam('quotationId'), idParam('documentId')],
   validate,
+  loadQuotation,
+  loadDocument,
   asyncHandler(quotationController.downloadDocumentFile),
 );
 

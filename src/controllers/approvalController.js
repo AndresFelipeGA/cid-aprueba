@@ -7,6 +7,7 @@ const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 
 const { STEP_TO_ROLE_MAP, MAX_STEP_LEVEL } = require('../models/ApprovalStep');
+const { loadVisibleRequisition } = require('./requisitionController');
 
 const approvalController = {
   approve(req, res) {
@@ -201,11 +202,7 @@ const approvalController = {
 
   history(req, res) {
     const { requisitionId } = req.params;
-
-    const requisition = Requisition.findById(requisitionId);
-    if (!requisition) {
-      throw new AppError('Requisición no encontrada', 404, 'REQUISITION_NOT_FOUND');
-    }
+    loadVisibleRequisition(requisitionId, req.user);
 
     const logs = ApprovalLog.findByRequisition(requisitionId);
 

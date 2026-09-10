@@ -18,6 +18,7 @@ const migrations = [
   require('./002_seed_users'),
   require('./003_workflow_restructure'),
   require('./004_projects'),
+  require('./005_indexes'),
 ];
 
 /**

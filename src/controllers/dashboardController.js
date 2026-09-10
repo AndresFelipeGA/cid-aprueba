@@ -1,5 +1,7 @@
 const Requisition = require('../models/Requisition');
 const ApprovalLog = require('../models/ApprovalLog');
+const { getPagination } = require('../middleware/validators');
+const { MAX_STEP_LEVEL } = require('../config/workflow');
 
 const dashboardController = {
   getStats(req, res) {
@@ -17,11 +19,11 @@ const dashboardController = {
 
     // Build by_step object with all 7 steps (fill zeros for missing steps)
     const byStep = {};
-    for (let i = 1; i <= 7; i++) {
+    for (let i = 1; i <= MAX_STEP_LEVEL; i++) {
       byStep[String(i)] = 0;
     }
     for (const row of levelCounts) {
-      if (row.level >= 1 && row.level <= 7) {
+      if (row.level >= 1 && row.level <= MAX_STEP_LEVEL) {
         byStep[String(row.level)] = row.count;
       }
     }
@@ -47,9 +49,7 @@ const dashboardController = {
 
   getPending(req, res) {
     const userRoleLevel = req.user.role_level;
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = getPagination(req);
 
     const { items, total } = Requisition.findPendingForRole(userRoleLevel, { limit, offset });
 
@@ -66,7 +66,7 @@ const dashboardController = {
   },
 
   getRecent(req, res) {
-    const limit = parseInt(req.query.limit, 10) || 10;
+    const { limit } = getPagination(req, 10);
     const items = Requisition.findRecent({ limit });
 
     res.json({

@@ -1,5 +1,7 @@
 const path = require('path');
 const fs = require('fs');
+const db = require('../config/database');
+const { getPagination } = require('../middleware/validators');
 const Requisition = require('../models/Requisition');
 const ApprovalStep = require('../models/ApprovalStep');
 const ApprovalLog = require('../models/ApprovalLog');
@@ -7,11 +9,26 @@ const Project = require('../models/Project');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 
+/**
+ * Load a requisition and enforce the visibility rule for the requesting user.
+ * @throws {AppError} 404 if missing, 403 if the user may not see it yet
+ */
+const loadVisibleRequisition = (id, user) => {
+  const requisition = Requisition.findById(id);
+  if (!requisition) {
+    throw new AppError('Requisición no encontrada', 404, 'REQUISITION_NOT_FOUND');
+  }
+  if (!Requisition.isVisibleTo(requisition, user)) {
+    throw new AppError('No autorizado para ver esta requisición', 403, 'FORBIDDEN');
+  }
+  return requisition;
+};
+
 const requisitionController = {
+  loadVisibleRequisition,
+
   list(req, res) {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = getPagination(req);
     const userRoleLevel = req.user.role_level;
 
     const { items, total } = Requisition.findAll({ limit, offset, userRoleLevel });
@@ -30,11 +47,8 @@ const requisitionController = {
 
   getById(req, res) {
     const { id } = req.params;
+    loadVisibleRequisition(id, req.user);
     const requisition = Requisition.getWithApprovals(id);
-
-    if (!requisition) {
-      throw new AppError('Requisición no encontrada', 404, 'REQUISITION_NOT_FOUND');
-    }
 
     res.json({
       success: true,
@@ -44,11 +58,6 @@ const requisitionController = {
   },
 
   create(req, res) {
-    // Only Coordinadores de Territorio (role_level 1) can create requisitions
-    if (req.user.role_level !== 1) {
-      throw new AppError('Solo los Coordinadores/as de Territorio pueden crear requisiciones', 403, 'FORBIDDEN');
-    }
-
     const { title, description, project_id } = req.body;
 
     if (!req.file) {
@@ -63,26 +72,26 @@ const requisitionController = {
       }
     }
 
-    const requisition = Requisition.create({
-      title,
-      description: description || null,
-      filePath: req.file.path,
-      originalFilename: req.file.originalname,
-      uploadedBy: req.user.id,
-      projectId: project_id || null,
-    });
-
-    // Create all 7 approval steps
-    ApprovalStep.createAll(requisition.id);
-
-    // Log the upload action
-    ApprovalLog.create({
-      requisitionId: requisition.id,
-      approvalStepId: null,
-      userId: req.user.id,
-      action: 'uploaded',
-      comments: null,
-    });
+    // Requisition + its 7 steps + the upload log entry are one atomic unit
+    const requisition = db.transaction(() => {
+      const created = Requisition.create({
+        title,
+        description: description || null,
+        filePath: req.file.path,
+        originalFilename: req.file.originalname,
+        uploadedBy: req.user.id,
+        projectId: project_id || null,
+      });
+      ApprovalStep.createAll(created.id);
+      ApprovalLog.create({
+        requisitionId: created.id,
+        approvalStepId: null,
+        userId: req.user.id,
+        action: 'uploaded',
+        comments: null,
+      });
+      return created;
+    })();
 
     logger.info(`Requisition uploaded: reqId=${requisition.id}, userId=${req.user.id}, title="${title}"`);
 
@@ -96,22 +105,14 @@ const requisitionController = {
   },
 
   getByStatus(req, res) {
-    const { status } = req.params;
-    const validStatuses = ['pending', 'in_review', 'approved', 'rejected'];
+    const { status } = req.params; // validated by statusParam
+    const { page, limit, offset } = getPagination(req);
 
-    if (!validStatuses.includes(status)) {
-      throw new AppError(
-        `Estado inválido. Debe ser uno de: ${validStatuses.join(', ')}`,
-        400,
-        'INVALID_STATUS',
-      );
-    }
-
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
-    const offset = (page - 1) * limit;
-
-    const { items, total } = Requisition.findByStatus(status, { limit, offset });
+    const { items, total } = Requisition.findByStatus(status, {
+      limit,
+      offset,
+      userRoleLevel: req.user.role_level,
+    });
 
     res.json({
       success: true,
@@ -126,12 +127,7 @@ const requisitionController = {
   },
 
   download(req, res) {
-    const { id } = req.params;
-    const requisition = Requisition.findById(id);
-
-    if (!requisition) {
-      throw new AppError('Requisición no encontrada', 404, 'REQUISITION_NOT_FOUND');
-    }
+    const requisition = loadVisibleRequisition(req.params.id, req.user);
 
     const filePath = path.resolve(requisition.file_path);
 

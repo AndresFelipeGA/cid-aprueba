@@ -1,14 +1,13 @@
 const db = require('../config/database');
 
+/** Every user column except password_hash — the only projection exposed to API consumers. */
+const PUBLIC_COLUMNS = 'id, username, email, full_name, role_level, territory, gender, is_active, created_at, updated_at';
+
 const User = {
   findById(id) {
     return db.prepare(
-      'SELECT id, username, email, full_name, role_level, territory, gender, is_active, created_at, updated_at FROM users WHERE id = ?'
+      `SELECT ${PUBLIC_COLUMNS} FROM users WHERE id = ?`
     ).get(id);
-  },
-
-  findByIdWithPassword(id) {
-    return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   },
 
   findByUsername(username) {
@@ -21,7 +20,7 @@ const User = {
 
   findAll() {
     return db.prepare(
-      'SELECT id, username, email, full_name, role_level, territory, gender, is_active, created_at, updated_at FROM users WHERE is_active = 1 ORDER BY role_level ASC'
+      `SELECT ${PUBLIC_COLUMNS} FROM users WHERE is_active = 1 ORDER BY role_level ASC`
     ).all();
   },
 
@@ -31,20 +30,8 @@ const User = {
    */
   findAllIncludingInactive() {
     return db.prepare(
-      'SELECT id, username, email, full_name, role_level, territory, gender, is_active, created_at, updated_at FROM users ORDER BY role_level ASC, username ASC'
+      `SELECT ${PUBLIC_COLUMNS} FROM users ORDER BY role_level ASC, username ASC`
     ).all();
-  },
-
-  findByRoleLevel(roleLevel) {
-    return db.prepare(
-      'SELECT id, username, email, full_name, role_level, territory, gender, is_active, created_at, updated_at FROM users WHERE role_level = ? AND is_active = 1'
-    ).all(roleLevel);
-  },
-
-  findByTerritory(territory) {
-    return db.prepare(
-      'SELECT id, username, email, full_name, role_level, territory, gender, is_active, created_at, updated_at FROM users WHERE territory = ? AND is_active = 1'
-    ).all(territory);
   },
 
   create({ username, email, passwordHash, fullName, roleLevel, territory, gender }) {

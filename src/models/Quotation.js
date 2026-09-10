@@ -139,23 +139,23 @@ const Quotation = {
       throw new AppError('La cotización no pertenece a esta requisición', 400, 'QUOTATION_MISMATCH');
     }
 
-    // Mark all quotations for this requisition as not_selected
-    db.prepare(`
-      UPDATE quotations SET status = 'not_selected', updated_at = datetime('now')
-      WHERE requisition_id = ?
-    `).run(requisitionId);
+    // Three dependent updates: atomic on their own, and they join any outer transaction
+    db.transaction(() => {
+      db.prepare(`
+        UPDATE quotations SET status = 'not_selected', updated_at = datetime('now')
+        WHERE requisition_id = ?
+      `).run(requisitionId);
 
-    // Mark the chosen quotation as selected
-    db.prepare(`
-      UPDATE quotations SET status = 'selected', updated_at = datetime('now')
-      WHERE id = ?
-    `).run(quotationId);
+      db.prepare(`
+        UPDATE quotations SET status = 'selected', updated_at = datetime('now')
+        WHERE id = ?
+      `).run(quotationId);
 
-    // Update the requisition's selected_quotation_id
-    db.prepare(`
-      UPDATE requisitions SET selected_quotation_id = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `).run(quotationId, requisitionId);
+      db.prepare(`
+        UPDATE requisitions SET selected_quotation_id = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(quotationId, requisitionId);
+    })();
 
     return Quotation.findById(quotationId);
   },

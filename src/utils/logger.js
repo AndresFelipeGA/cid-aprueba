@@ -5,7 +5,10 @@ const LOG_LEVELS = {
   debug: 3,
 };
 
-const currentLevel = process.env.NODE_ENV === 'production' ? 'info' : 'debug';
+const defaultLevel = process.env.NODE_ENV === 'production' ? 'info' : 'debug';
+const currentLevel = LOG_LEVELS[process.env.LOG_LEVEL] !== undefined
+  ? process.env.LOG_LEVEL
+  : defaultLevel;
 
 const formatTimestamp = () => new Date().toISOString();
 

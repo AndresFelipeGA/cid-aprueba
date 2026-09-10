@@ -87,17 +87,6 @@ img {
   display: none !important;
 }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  border: 0;
-}
-
 /* --- Buttons --- */
 .btn {
   display: inline-flex;
@@ -310,6 +299,7 @@ textarea.form__input {
 }
 
 .sidebar__link {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -544,11 +534,6 @@ textarea.form__input {
 .badge--rejected {
   background-color: rgba(178, 34, 34, 0.1);
   color: var(--color-danger);
-}
-
-.badge--uploaded {
-  background-color: rgba(100, 100, 100, 0.1);
-  color: var(--color-text-light);
 }
 
 /* --- Requisition Detail --- */
@@ -1107,6 +1092,31 @@ textarea.form__input {
   display: flex;
   gap: 10px;
   margin-top: 8px;
+}
+
+/* --- Confirmation Dialog (native <dialog>) --- */
+.confirm-dialog {
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+  padding: 32px;
+  width: calc(100% - 32px);
+  max-width: 420px;
+}
+
+.confirm-dialog::backdrop {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.confirm-dialog .modal__text {
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+.confirm-dialog .modal__actions {
+  justify-content: flex-end;
 }
 
 /* --- Profile Page --- */
@@ -2634,8 +2644,13 @@ body,
   background-color: rgba(0, 0, 0, 0.7);
 }
 
-[data-theme="dark"] .modal__content {
+[data-theme="dark"] .modal__content,
+[data-theme="dark"] .confirm-dialog {
   border: 1px solid var(--color-border);
+}
+
+[data-theme="dark"] .confirm-dialog::backdrop {
+  background-color: rgba(0, 0, 0, 0.7);
 }
 
 /* --- Dark Mode: Document Modal --- */
@@ -2745,10 +2760,6 @@ body,
   background-color: rgba(178, 34, 34, 0.2);
 }
 
-[data-theme="dark"] .badge--uploaded {
-  background-color: rgba(160, 160, 160, 0.15);
-}
-
 [data-theme="dark"] .badge--user-active {
   background-color: rgba(107, 142, 35, 0.2);
 }
@@ -2760,28 +2771,6 @@ body,
 /* --- Dark Mode: Pending Items --- */
 [data-theme="dark"] .pending-item:hover {
   background-color: rgba(200, 90, 42, 0.06);
-}
-
-/* --- Dark Mode: Donut Chart Center Text --- */
-[data-theme="dark"] .donut-center-number {
-  fill: var(--color-text);
-}
-
-[data-theme="dark"] .donut-center-label {
-  fill: var(--color-text-light);
-}
-
-/* --- Dark Mode: Bar Chart Labels --- */
-[data-theme="dark"] .bar-label {
-  color: var(--color-text-light);
-}
-
-[data-theme="dark"] .bar-count {
-  color: var(--color-text);
-}
-
-[data-theme="dark"] .bar-count--zero {
-  color: var(--color-text-light);
 }
 
 /* --- Dark Mode: Overlay --- */
@@ -2876,10 +2865,6 @@ body,
 /* ============================================
    Activity Badge (Sidebar Nav)
    ============================================ */
-
-.sidebar__link {
-  position: relative;
-}
 
 .sidebar__badge {
   position: absolute;
