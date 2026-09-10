@@ -179,7 +179,7 @@ img {
 }
 
 .splash__logo {
-  width: min(380px, 78vw);
+  width: min(456px, 84vw);
   filter: drop-shadow(0 12px 28px rgba(200, 90, 42, 0.18));
 }
 
@@ -258,7 +258,7 @@ img {
 }
 
 .splash__bar {
-  width: 200px;
+  width: 240px;
   height: 3px;
   border-radius: 999px;
   background: var(--color-border);
@@ -431,6 +431,9 @@ textarea.form__input {
 /* --- Sidebar --- */
 .sidebar {
   grid-area: sidebar;
+  position: sticky;
+  top: 0;
+  height: 100vh;
   background-color: var(--color-surface);
   border-right: 1px solid var(--color-border);
   display: flex;
@@ -453,6 +456,36 @@ textarea.form__input {
 .sidebar__nav {
   flex: 1;
   padding: 16px 0;
+}
+
+.sidebar__credit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 24px 18px;
+  border-top: 1px solid var(--color-border);
+  opacity: 0.72;
+  transition: opacity var(--transition);
+}
+
+.sidebar__credit:hover,
+.sidebar__credit:focus-visible {
+  opacity: 1;
+}
+
+.sidebar__credit-label {
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-light);
+}
+
+.sidebar__credit-logo {
+  display: block;
+  width: 120px;
+  height: auto;
 }
 
 .sidebar__link {
