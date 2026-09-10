@@ -435,7 +435,12 @@ function renderTimeline(requisition, steps, logs) {
   const isCurrentStep = (step) => step.step_level === requisition.current_approval_level && isOpen(requisition);
 
   for (const step of steps) {
-    const stepLog = logs.find((l) => l.approval_step_id === step.id && l.action !== 'returned');
+    // A step can be re-approved after a return: only attribute it to the log from its
+    // CURRENT cycle (i.e. once it is actually approved/rejected), never a stale one from
+    // before the return, while it sits pending again.
+    const stepLog = step.status === 'pending'
+      ? null
+      : logs.find((l) => l.approval_step_id === step.id && l.action !== 'returned');
     let itemClass = 'timeline__item--pending';
     if (step.status === 'approved') {
       itemClass = 'timeline__item--approved';
