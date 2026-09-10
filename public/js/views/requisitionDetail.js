@@ -5,7 +5,7 @@
    ============================================ */
 
 import * as API from '../api.js';
-import { state, setPendingPreview, takePendingPreview } from '../state.js';
+import { state } from '../state.js';
 import { escapeHtml, formatDate, formatDateShort, formatCurrency, formatPercent } from '../utils/format.js';
 import {
   statusBadge, statusLabel, actionLabel, stepLabel, stepRole, roleNameForStep, docTypes, acceptAttr, firstApprovalLevel,
@@ -625,14 +625,6 @@ export async function render(container, params, ctx) {
       });
     }
   }
-
-  // Auto-preview a file that was just uploaded
-  const pending = takePendingPreview();
-  if (pending) {
-    setTimeout(() => {
-      if (!ctx.isStale()) openDocumentModal(pending.fetchFn, pending.filename);
-    }, 400);
-  }
 }
 
 // --- Approval handlers ---
@@ -788,14 +780,7 @@ async function submitQuotation(requisitionId) {
   setFeedback(feedback, 'error', '');
 
   try {
-    const result = await API.createQuotation(requisitionId, formData);
-    const created = result && result.data && result.data.quotation;
-    if (created) {
-      setPendingPreview({
-        fetchFn: () => API.downloadQuotationFile(requisitionId, created.id),
-        filename: created.original_filename || fileInput.files[0].name,
-      });
-    }
+    await API.createQuotation(requisitionId, formData);
     navigate('requisition-detail', { id: requisitionId });
   } catch (err) {
     setFeedback(feedback, 'error', err.message || 'Error al crear la cotización');
@@ -821,14 +806,7 @@ async function attachQuotationDoc(requisitionId, quotationId, docType, fileInput
   formData.append('file', fileInput.files[0]);
 
   try {
-    const result = await API.uploadQuotationDocument(requisitionId, quotationId, formData);
-    const created = result && result.data && result.data.document;
-    if (created) {
-      setPendingPreview({
-        fetchFn: () => API.downloadQuotationDocument(requisitionId, quotationId, created.id),
-        filename: created.original_filename || fileInput.files[0].name,
-      });
-    }
+    await API.uploadQuotationDocument(requisitionId, quotationId, formData);
     navigate('requisition-detail', { id: requisitionId });
   } catch (err) {
     showToast(err.message || 'Error al adjuntar el documento', 'error');

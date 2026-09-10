@@ -16,8 +16,6 @@ export const state = {
   renderGen: 0,
   /** Interval id for sidebar badge polling. */
   badgeTimer: null,
-  /** File to auto-preview after the next detail render: { fetchFn, filename }. */
-  pendingPreview: null,
 };
 
 export function setUser(user) {
@@ -35,17 +33,6 @@ export function setMeta(meta) {
 
 export function setBadgeTimer(id) {
   state.badgeTimer = id;
-}
-
-export function setPendingPreview(info) {
-  state.pendingPreview = info;
-}
-
-/** Return and clear the pending preview request. */
-export function takePendingPreview() {
-  const info = state.pendingPreview;
-  state.pendingPreview = null;
-  return info;
 }
 
 /** Start a new render generation and return its token. */
