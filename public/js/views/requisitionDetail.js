@@ -120,6 +120,22 @@ function renderQuotationCard(requisition, quotation, canEdit) {
     }
   }
 
+  // The payment proof is edited from the approval panel at the payment step (renderPaymentPanel);
+  // here it's shown read-only wherever else the quotation card appears (step 7 onward, and once finished).
+  const isAtPaymentStep = requisition.current_approval_level === paymentStep() && isOpen(requisition);
+  const paymentDoc = docs.find((d) => d.doc_type === paymentDocType());
+  if (paymentDoc && !isAtPaymentStep) {
+    const docName = escapeHtml(paymentDoc.original_filename);
+    html += `
+      <div class="quotation-card__doc-item">
+        <span class="quotation-card__doc-status quotation-card__doc-status--complete quotation-card__doc-filename" role="button" tabindex="0" data-action="preview-quotation-doc" data-req-id="${reqId}" data-quotation-id="${qId}" data-doc-id="${paymentDoc.id}" data-filename="${docName}" title="Clic para vista previa">✅ ${escapeHtml(paymentDocLabel())}: ${docName}</span>
+        <div class="quotation-card__actions">
+          <button class="btn btn--outline btn--sm" data-action="preview-quotation-doc" data-req-id="${reqId}" data-quotation-id="${qId}" data-doc-id="${paymentDoc.id}" data-filename="${docName}">Ver</button>
+        </div>
+      </div>
+    `;
+  }
+
   html += '</div></div>';
   return html;
 }
@@ -626,7 +642,9 @@ export async function render(container, params, ctx) {
             </li>
             <li>
               <span class="req-detail__meta-label">Nivel actual</span>
-              <span class="req-detail__meta-value">${escapeHtml(stepLabel(level))} (${escapeHtml(roleNameForStep(level))})</span>
+              <span class="req-detail__meta-value">${requisition.status === 'approved'
+    ? 'Finalizada'
+    : `${escapeHtml(stepLabel(level))} (${escapeHtml(roleNameForStep(level))})`}</span>
             </li>
             <li>
               <span class="req-detail__meta-label">Proyecto</span>
