@@ -49,11 +49,20 @@ const quotationController = {
     }
     const requisitionId = req.requisition.id;
     const providerName = req.body.provider_name.trim();
+    const amount = Number(req.body.amount);
+
+    if (req.requisition.budget_cap && amount > req.requisition.budget_cap) {
+      throw new AppError(
+        `El monto de la cotización (${amount}) supera el presupuesto máximo de la requisición (${req.requisition.budget_cap})`,
+        400,
+        'AMOUNT_EXCEEDS_BUDGET_CAP',
+      );
+    }
 
     const quotation = Quotation.create({
       requisitionId,
       providerName,
-      amount: req.body.amount,
+      amount,
       notes: req.body.notes,
       filePath: storeQuotationFile(req.file, requisitionId, 'cotizacion'),
       originalFilename: req.file.originalname,

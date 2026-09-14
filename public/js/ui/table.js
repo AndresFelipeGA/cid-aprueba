@@ -15,13 +15,18 @@ import { escapeHtml } from '../utils/format.js';
  * @param {Object} [opts.filters]
  * @param {{id: string, placeholder: string, label: string, fields: (row: Object) => string[]}} [opts.filters.search]
  * @param {Array<{id: string, label: string, allLabel: string, options: string, matches: (row: Object, value: string) => boolean}>} [opts.filters.selects]
+ * @param {{fromId: string, toId: string, fromLabel: string, toLabel: string, field: (row: Object) => string}} [opts.filters.dateRange]  Filters by a ISO date/datetime field
  * @param {string} opts.emptyText
  * @param {(row: Object) => string} [opts.rowAttrs]  Extra attributes for each <tr>
  * @param {(tableContainer: HTMLElement) => void} [opts.afterRender]
+ * @param {(visibleRows: Object[]) => void} [opts.onFilterChange]  Called with the currently-visible rows whenever filters change
  */
 export function renderFilterableTable(opts) {
-  const { filtersContainer, tableContainer, columns, rows, filters = {}, emptyText, rowAttrs, afterRender } = opts;
+  const {
+    filtersContainer, tableContainer, columns, rows, filters = {}, emptyText, rowAttrs, afterRender, onFilterChange,
+  } = opts;
   const selects = filters.selects || [];
+  const dateRange = filters.dateRange || null;
 
   // --- Filter bar ---
   if (filtersContainer) {
@@ -35,6 +40,15 @@ export function renderFilterableTable(opts) {
           <option value="">${escapeHtml(sel.allLabel)}</option>
           ${sel.options}
         </select>`;
+    }
+    if (dateRange) {
+      bar += `
+        <div class="search-filters__date-range">
+          <label class="search-filters__date-label" for="${dateRange.fromId}">${escapeHtml(dateRange.fromLabel || 'Desde')}</label>
+          <input type="date" class="search-filters__date" id="${dateRange.fromId}" aria-label="${escapeHtml(dateRange.fromLabel || 'Desde')}">
+          <label class="search-filters__date-label" for="${dateRange.toId}">${escapeHtml(dateRange.toLabel || 'Hasta')}</label>
+          <input type="date" class="search-filters__date" id="${dateRange.toId}" aria-label="${escapeHtml(dateRange.toLabel || 'Hasta')}">
+        </div>`;
     }
     bar += '</div>';
     filtersContainer.innerHTML = bar;
@@ -76,9 +90,13 @@ export function renderFilterableTable(opts) {
     sel,
     el: filtersContainer ? filtersContainer.querySelector(`#${sel.id}`) : null,
   }));
+  const fromEl = dateRange && filtersContainer ? filtersContainer.querySelector(`#${dateRange.fromId}`) : null;
+  const toEl = dateRange && filtersContainer ? filtersContainer.querySelector(`#${dateRange.toId}`) : null;
 
   const apply = () => {
     const term = searchEl ? searchEl.value.trim().toLowerCase() : '';
+    const from = fromEl && fromEl.value ? fromEl.value : null;
+    const to = toEl && toEl.value ? toEl.value : null;
     const filtered = rows.filter((row) => {
       if (term) {
         const haystack = filters.search.fields(row).map((v) => (v || '').toLowerCase());
@@ -88,15 +106,26 @@ export function renderFilterableTable(opts) {
         const value = el ? el.value : '';
         if (value !== '' && !sel.matches(row, value)) return false;
       }
+      if (dateRange && (from || to)) {
+        const raw = dateRange.field(row);
+        const rowDate = raw ? String(raw).slice(0, 10) : null;
+        if (!rowDate) return false;
+        if (from && rowDate < from) return false;
+        if (to && rowDate > to) return false;
+      }
       return true;
     });
     renderTable(filtered);
+    if (onFilterChange) onFilterChange(filtered);
   };
 
   if (searchEl) searchEl.addEventListener('input', apply);
   for (const { el } of selectEls) {
     if (el) el.addEventListener('change', apply);
   }
+  if (fromEl) fromEl.addEventListener('change', apply);
+  if (toEl) toEl.addEventListener('change', apply);
 
   renderTable(rows);
+  if (onFilterChange) onFilterChange(rows);
 }

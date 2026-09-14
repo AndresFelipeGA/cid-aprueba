@@ -28,6 +28,9 @@ router.get('/', pagination, validate, asyncHandler(requisitionController.list));
 // GET /api/requisitions/export.csv  (static paths before /:id)
 router.get('/export.csv', asyncHandler(requisitionController.exportCsv));
 
+// GET /api/requisitions/export.pdf
+router.get('/export.pdf', asyncHandler(requisitionController.downloadReportPdf));
+
 // GET /api/requisitions/status/:status
 router.get('/status/:status', [statusParam, ...pagination], validate, asyncHandler(requisitionController.getByStatus));
 
@@ -43,6 +46,7 @@ router.post(
   [
     ...documentFields,
     body('project_id').optional({ values: 'falsy' }).isInt({ min: 1 }).withMessage('El ID del proyecto debe ser un número entero válido'),
+    body('budget_cap').isFloat({ min: 1 }).withMessage('El presupuesto máximo es requerido y debe ser mayor a cero').toFloat(),
   ],
   validate,
   asyncHandler(requisitionController.create),
@@ -74,5 +78,11 @@ router.get(
   validate,
   asyncHandler(requisitionController.downloadVersion),
 );
+
+// GET /api/requisitions/:id/acta-consolidada.pdf
+router.get('/:id/acta-consolidada.pdf', [idParam()], validate, asyncHandler(requisitionController.downloadActaPdf));
+
+// GET /api/requisitions/:id/expediente.zip
+router.get('/:id/expediente.zip', [idParam()], validate, asyncHandler(requisitionController.downloadActaZip));
 
 module.exports = router;

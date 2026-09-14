@@ -9,6 +9,7 @@ const Project = require('../models/Project');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 const { toCsv, sendCsv } = require('../utils/csv');
+const { buildConsolidatedActaPdf, buildActaCoverPdf, buildActaZipStream, buildRequisitionsReportPdf } = require('../utils/actaPdf');
 const { STEP_LABELS, STATUS_LABELS, FIRST_APPROVAL_LEVEL } = require('../config/workflow');
 
 /**
@@ -38,6 +39,15 @@ const paginated = (res, { items, total, page, limit }) => {
   res.json({ success: true, data: { items, total, page, limit }, message: null });
 };
 
+/** Parses `?ids=1,2,3` into an array of positive integers, or undefined if the param is absent. */
+const parseIds = (req) => {
+  if (req.query.ids === undefined) return undefined;
+  return req.query.ids
+    .split(',')
+    .map((v) => parseInt(v, 10))
+    .filter((n) => Number.isInteger(n) && n > 0);
+};
+
 const requisitionController = {
   loadVisibleRequisition,
 
@@ -64,7 +74,7 @@ const requisitionController = {
    * created in review at FIRST_APPROVAL_LEVEL. Row + steps + log are atomic.
    */
   create(req, res) {
-    const { title, description, project_id } = req.body;
+    const { title, description, project_id, budget_cap } = req.body;
 
     if (!req.file) {
       throw new AppError('El archivo es requerido', 400, 'FILE_REQUIRED');
@@ -81,6 +91,7 @@ const requisitionController = {
         originalFilename: req.file.originalname,
         uploadedBy: req.user.id,
         projectId: project_id || null,
+        budgetCap: budget_cap,
       });
       ApprovalStep.createAll(created.id);
       ApprovalLog.create({
@@ -166,14 +177,42 @@ const requisitionController = {
     sendFile(res, version.file_path, version.original_filename);
   },
 
-  /** GET /api/requisitions/export.csv — every requisition visible to the user. */
+  /** GET /api/requisitions/:id/acta-consolidada.pdf — cover + every attached document merged into one PDF. */
+  async downloadActaPdf(req, res) {
+    const requisition = loadVisibleRequisition(req.params.id, req.user);
+    if (requisition.status !== 'approved') {
+      throw new AppError('El acta consolidada solo está disponible para requisiciones aprobadas', 400, 'NOT_APPROVED');
+    }
+    const full = Requisition.getWithApprovals(requisition.id);
+    const pdf = await buildConsolidatedActaPdf(full);
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="acta-consolidada-${full.number || full.id}.pdf"`);
+    res.send(pdf);
+  },
+
+  /** GET /api/requisitions/:id/expediente.zip — the same documents, kept as separate files. */
+  async downloadActaZip(req, res) {
+    const requisition = loadVisibleRequisition(req.params.id, req.user);
+    if (requisition.status !== 'approved') {
+      throw new AppError('El expediente solo está disponible para requisiciones aprobadas', 400, 'NOT_APPROVED');
+    }
+    const full = Requisition.getWithApprovals(requisition.id);
+    const coverPdf = await buildActaCoverPdf(full);
+    res.set('Content-Type', 'application/zip');
+    res.set('Content-Disposition', `attachment; filename="expediente-${full.number || full.id}.zip"`);
+    const archive = buildActaZipStream(full, coverPdf);
+    archive.pipe(res);
+  },
+
+  /** GET /api/requisitions/export.csv?ids=1,2,3 — visible requisitions, optionally restricted to the given ids (e.g. the caller's current filtered view). */
   exportCsv(req, res) {
-    const rows = Requisition.findAllForExport(req.user);
+    const rows = Requisition.findAllForExport(req.user, parseIds(req));
     const csv = toCsv([
       { key: 'number', header: 'Número' },
       { key: 'title', header: 'Título' },
       { key: 'project_code', header: 'Código proyecto' },
       { key: 'project_name', header: 'Proyecto' },
+      { key: 'budget_cap', header: 'Presupuesto Máximo (COP)' },
       { header: 'Estado', format: (r) => STATUS_LABELS[r.status] || r.status },
       { header: 'Etapa actual', format: (r) => (STEP_LABELS[r.current_approval_level] || (r.status === 'approved' ? 'Finalizada' : r.current_approval_level)) },
       { key: 'version', header: 'Versión' },
@@ -187,6 +226,15 @@ const requisitionController = {
     ], rows);
 
     sendCsv(res, `requisiciones-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+  },
+
+  /** GET /api/requisitions/export.pdf?ids=1,2,3 — a branded report, same row set as the CSV export. */
+  async downloadReportPdf(req, res) {
+    const rows = Requisition.findAllForExport(req.user, parseIds(req));
+    const pdf = await buildRequisitionsReportPdf(rows);
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="requisiciones-${new Date().toISOString().slice(0, 10)}.pdf"`);
+    res.send(pdf);
   },
 };
 

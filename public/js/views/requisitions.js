@@ -48,10 +48,26 @@ export function buildProgressBar(req) {
   `;
 }
 
+/** Distinct {id, name} projects among the loaded requisitions, as <option> HTML. */
+function projectOptionsFrom(requisitions) {
+  const seen = new Map();
+  for (const req of requisitions) {
+    if (req.project_id && !seen.has(req.project_id)) seen.set(req.project_id, req.project_name);
+  }
+  return [...seen.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]))
+    .map(([id, name]) => `<option value="${id}">${escapeHtml(name)}</option>`)
+    .join('');
+}
+
+// Row ids currently visible after filtering — export respects exactly what's on screen.
+let filteredIds = [];
+
 export async function render(container, _params, ctx) {
   const result = await API.getAllRequisitions();
   if (ctx.isStale()) return;
   const requisitions = result.data.items || [];
+  filteredIds = requisitions.map((r) => r.id);
 
   let html = `
     <div class="main__header">
@@ -72,6 +88,7 @@ export async function render(container, _params, ctx) {
     tableContainer: container.querySelector('#req-table-container'),
     rows: requisitions,
     emptyText: 'No se encontraron requisiciones',
+    onFilterChange: (visibleRows) => { filteredIds = visibleRows.map((r) => r.id); },
     filters: {
       search: {
         id: 'req-search',
@@ -94,7 +111,21 @@ export async function render(container, _params, ctx) {
           options: stepOptions(),
           matches: (req, value) => req.current_approval_level === parseInt(value, 10),
         },
+        {
+          id: 'req-filter-project',
+          label: 'Filtrar por proyecto',
+          allLabel: 'Proyecto: Todos',
+          options: projectOptionsFrom(requisitions),
+          matches: (req, value) => String(req.project_id) === value,
+        },
       ],
+      dateRange: {
+        fromId: 'req-filter-from',
+        toId: 'req-filter-to',
+        fromLabel: 'Desde',
+        toLabel: 'Hasta',
+        field: (req) => req.created_at,
+      },
     },
     columns: [
       {
@@ -124,20 +155,23 @@ export async function render(container, _params, ctx) {
     },
   });
 
-  // "Exportar CSV" sits in the same row as the filters
+  // Export buttons sit in the same row as the filters, and always reflect the filtered set on screen
   const filterBar = container.querySelector('#req-filters .search-filters');
   if (filterBar) {
     filterBar.insertAdjacentHTML(
       'beforeend',
-      '<button class="btn btn--outline search-filters__export" id="btn-export-requisitions" data-action="export-requisitions">Exportar CSV</button>',
+      `<div class="search-filters__export-group">
+        <button class="btn btn--outline" id="btn-export-csv" data-action="export-requisitions-csv" title="Datos en bruto para Excel">Exportar CSV</button>
+        <button class="btn btn--secondary" id="btn-export-pdf" data-action="export-requisitions-pdf" title="Reporte con el mismo formato del acta">📄 Exportar PDF</button>
+      </div>`,
     );
   }
 }
 
-async function exportCsv(btn) {
-  const restore = setButtonBusy(btn, 'Exportando...');
+async function exportAs(btn, fn, busyLabel) {
+  const restore = setButtonBusy(btn, busyLabel);
   try {
-    await API.exportRequisitionsCsv();
+    await fn(filteredIds);
   } catch (err) {
     showToast(err.message || 'No se pudo exportar el archivo', 'error');
   } finally {
@@ -146,5 +180,6 @@ async function exportCsv(btn) {
 }
 
 export const actions = {
-  'export-requisitions': (t) => exportCsv(t),
+  'export-requisitions-csv': (t) => exportAs(t, API.exportRequisitionsCsv, 'Exportando...'),
+  'export-requisitions-pdf': (t) => exportAs(t, API.exportRequisitionsPdf, 'Generando...'),
 };

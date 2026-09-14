@@ -93,10 +93,21 @@ const Requisition = {
     return Requisition.findAll({ limit, offset, user, status });
   },
 
-  /** All visible requisitions (no pagination) for exports. */
-  findAllForExport(user) {
+  /**
+   * All visible requisitions (no pagination) for exports.
+   * @param {number[]} [ids] - Restrict to these ids (e.g. the caller's current filtered view).
+   *   Still intersected with visibility, so a crafted id list can't leak invisible rows.
+   */
+  findAllForExport(user, ids) {
     const vis = visibilityClause(user);
-    return db.prepare(`${SELECT_WITH_JOINS} WHERE ${vis.sql} ORDER BY r.created_at DESC`).all(...vis.params);
+    let sql = `${SELECT_WITH_JOINS} WHERE ${vis.sql}`;
+    const params = [...vis.params];
+    if (ids) {
+      if (ids.length === 0) return [];
+      sql += ` AND r.id IN (${ids.map(() => '?').join(',')})`;
+      params.push(...ids);
+    }
+    return db.prepare(`${sql} ORDER BY r.created_at DESC`).all(...params);
   },
 
   /** Next readable number, REQ-<year>-<4-digit sequence within the year>. Call inside a transaction. */
@@ -109,12 +120,12 @@ const Requisition = {
   /**
    * Create a requisition. Uploading completes step 1, so it starts in review at FIRST_APPROVAL_LEVEL.
    */
-  create({ title, description, filePath, originalFilename, uploadedBy, projectId }) {
+  create({ title, description, filePath, originalFilename, uploadedBy, projectId, budgetCap }) {
     const number = Requisition.nextNumber();
     const result = db.prepare(`
-      INSERT INTO requisitions (number, title, description, file_path, original_filename, uploaded_by, project_id, status, current_approval_level, version)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'in_review', ?, 1)
-    `).run(number, title, description || null, filePath, originalFilename, uploadedBy, projectId || null, FIRST_APPROVAL_LEVEL);
+      INSERT INTO requisitions (number, title, description, file_path, original_filename, uploaded_by, project_id, budget_cap, status, current_approval_level, version)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_review', ?, 1)
+    `).run(number, title, description || null, filePath, originalFilename, uploadedBy, projectId || null, budgetCap || null, FIRST_APPROVAL_LEVEL);
 
     const id = result.lastInsertRowid;
     Requisition.addVersion({ requisitionId: id, version: 1, title, description, filePath, originalFilename, createdBy: uploadedBy });

@@ -121,6 +121,11 @@ export async function render(container, _params, ctx) {
             <textarea class="form__input" id="upload-description" rows="3" maxlength="1000" placeholder="Descripción opcional de la requisición"></textarea>
           </div>
           <div class="form__group">
+            <label class="form__label" for="upload-budget-cap">Presupuesto Máximo (COP)</label>
+            <input class="form__input" type="number" id="upload-budget-cap" required min="1" step="1" inputmode="numeric" placeholder="Ej: 5000000">
+            <p class="form__hint">Las cotizaciones de proveedores no podrán superar este valor.</p>
+          </div>
+          <div class="form__group">
             <label class="form__label" for="upload-project">Proyecto</label>
             <select class="form__input project-select" id="upload-project">
               ${projectOptions}
@@ -203,11 +208,17 @@ async function handleCreateRequisition(e) {
   const description = $('#upload-description').value.trim();
   const projectSelect = $('#upload-project');
   const projectId = projectSelect ? projectSelect.value : '';
+  const budgetCapInput = $('#upload-budget-cap');
+  const budgetCap = budgetCapInput ? Number(budgetCapInput.value) : NaN;
   const fileInput = $('#upload-file');
   const feedback = $('#upload-feedback');
 
   if (!title_) {
     setFeedback(feedback, 'error', 'El título es obligatorio');
+    return;
+  }
+  if (!budgetCapInput || budgetCapInput.value.trim() === '' || Number.isNaN(budgetCap) || budgetCap <= 0) {
+    setFeedback(feedback, 'error', 'El presupuesto máximo es obligatorio y debe ser mayor a cero');
     return;
   }
   if (!fileInput.files || fileInput.files.length === 0) {
@@ -218,6 +229,7 @@ async function handleCreateRequisition(e) {
   const formData = new FormData();
   formData.append('title', title_);
   formData.append('description', description);
+  formData.append('budget_cap', String(budgetCap));
   if (projectId && projectId !== 'new') formData.append('project_id', projectId);
   formData.append('file', fileInput.files[0]);
 

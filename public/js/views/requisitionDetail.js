@@ -165,7 +165,8 @@ function renderQuotationsPanel(requisition, quotations) {
         </div>
         <div class="quotation-form__field">
           <label class="form__label" for="quotation-amount">Monto (COP)</label>
-          <input class="form__input" type="number" id="quotation-amount" required min="1" step="1" inputmode="numeric" placeholder="Ej: 1250000">
+          <input class="form__input" type="number" id="quotation-amount" required min="1" ${requisition.budget_cap ? `max="${requisition.budget_cap}"` : ''} step="1" inputmode="numeric" placeholder="Ej: 1250000">
+          ${requisition.budget_cap ? `<p class="form__hint">No puede superar el presupuesto máximo de ${formatCurrency(requisition.budget_cap)}.</p>` : ''}
         </div>
         <div class="quotation-form__field">
           <label class="form__label" for="quotation-notes">Notas (opcional)</label>
@@ -177,7 +178,7 @@ function renderQuotationsPanel(requisition, quotations) {
         </div>
         <div id="quotation-form-feedback"></div>
         <div class="quotation-form__actions">
-          <button class="btn btn--primary btn--sm" id="btn-submit-quotation" data-action="submit-quotation" data-req-id="${requisition.id}">Subir Cotización</button>
+          <button class="btn btn--primary btn--sm" id="btn-submit-quotation" data-action="submit-quotation" data-req-id="${requisition.id}" data-budget-cap="${requisition.budget_cap || ''}">Subir Cotización</button>
           <button class="btn btn--outline btn--sm" data-action="cancel-quotation-form">Cancelar</button>
         </div>
       </div>
@@ -650,6 +651,11 @@ export async function render(container, params, ctx) {
               <span class="req-detail__meta-label">Proyecto</span>
               <span class="req-detail__meta-value">${projectHtml}</span>
             </li>
+            ${requisition.budget_cap ? `
+            <li>
+              <span class="req-detail__meta-label">Presupuesto Máximo</span>
+              <span class="req-detail__meta-value">${formatCurrency(requisition.budget_cap)}</span>
+            </li>` : ''}
             <li>
               <span class="req-detail__meta-label">Radicada por</span>
               <span class="req-detail__meta-value">${escapeHtml(requisition.uploader_name)}${requisition.uploader_territory ? ` — ${escapeHtml(requisition.uploader_territory)}` : ''}</span>
@@ -834,7 +840,7 @@ function cancelQuotationForm() {
   setFeedback($('#quotation-form-feedback'), 'error', '');
 }
 
-async function submitQuotation(requisitionId) {
+async function submitQuotation(requisitionId, budgetCap) {
   const providerInput = $('#quotation-provider');
   const amountInput = $('#quotation-amount');
   const notesInput = $('#quotation-notes');
@@ -850,6 +856,10 @@ async function submitQuotation(requisitionId) {
   const amount = amountInput ? Number(amountInput.value) : NaN;
   if (!amountInput || amountInput.value.trim() === '' || Number.isNaN(amount) || amount <= 0) {
     setFeedback(feedback, 'error', 'El monto de la cotización es obligatorio y debe ser mayor a cero');
+    return;
+  }
+  if (budgetCap && amount > budgetCap) {
+    setFeedback(feedback, 'error', `El monto no puede superar el presupuesto máximo de ${formatCurrency(budgetCap)}`);
     return;
   }
   if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
@@ -952,7 +962,7 @@ export const actions = {
     ),
   'toggle-quotation-form': () => toggleQuotationForm(),
   'cancel-quotation-form': () => cancelQuotationForm(),
-  'submit-quotation': (t) => submitQuotation(t.dataset.reqId),
+  'submit-quotation': (t) => submitQuotation(t.dataset.reqId, Number(t.dataset.budgetCap) || null),
   'delete-quotation': (t) => deleteQuotation(t.dataset.reqId, t.dataset.quotationId),
   'delete-quotation-doc': (t) => deleteQuotationDoc(t.dataset.reqId, t.dataset.quotationId, t.dataset.docId),
   'delete-payment-doc': (t) => deletePaymentDoc(t.dataset.reqId, t.dataset.docId),

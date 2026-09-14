@@ -178,8 +178,20 @@ export function downloadRequisitionVersion(id, versionId) {
   return request('GET', `/requisitions/${id}/versions/${versionId}/download`);
 }
 
-export function exportRequisitionsCsv() {
-  return downloadFile('/requisitions/export.csv', 'requisiciones.csv');
+export function exportRequisitionsCsv(ids) {
+  return downloadFile(`/requisitions/export.csv?ids=${(ids || []).join(',')}`, 'requisiciones.csv');
+}
+
+export function exportRequisitionsPdf(ids) {
+  return downloadFile(`/requisitions/export.pdf?ids=${(ids || []).join(',')}`, 'requisiciones.pdf');
+}
+
+export function downloadActaConsolidada(id) {
+  return downloadFile(`/requisitions/${id}/acta-consolidada.pdf`, `acta-consolidada-${id}.pdf`);
+}
+
+export function downloadExpediente(id) {
+  return downloadFile(`/requisitions/${id}/expediente.zip`, `expediente-${id}.zip`);
 }
 
 // --- Approvals ---

@@ -7,6 +7,8 @@ import * as API from '../api.js';
 import { escapeHtml, formatDate, formatCurrency } from '../utils/format.js';
 import { stepLabel, roleNameForStep, roleName, maxStep, docTypes, statusLabel } from '../meta.js';
 import { navigate, hrefFor } from '../router.js';
+import { showToast } from '../ui/toast.js';
+import { setButtonBusy } from '../ui/feedback.js';
 
 export const title = 'Acta de aprobación';
 
@@ -166,6 +168,8 @@ export async function render(container, params, ctx) {
       <div class="acta-toolbar__actions">
         <button class="btn btn--outline" data-action="back-to-detail" data-id="${requisition.id}">Volver</button>
         <button class="btn btn--primary" id="btn-print-acta" data-action="print-acta">Imprimir / Guardar como PDF</button>
+        <button class="btn btn--secondary" id="btn-acta-consolidada" data-action="download-acta-consolidada" data-id="${requisition.id}" title="Un solo PDF: acta + requisición + comprobante de pago + documentos del proveedor">📎 Acta Consolidada</button>
+        <button class="btn btn--outline" id="btn-expediente" data-action="download-expediente" data-id="${requisition.id}" title="Los mismos documentos, cada uno por separado, en un .zip">🗂️ Expediente Completo</button>
       </div>
     </div>
 
@@ -182,6 +186,7 @@ export async function render(container, params, ctx) {
         <dl class="acta__facts">
           <div><dt>Requisición</dt><dd>${escapeHtml(requisition.title)}</dd></div>
           <div><dt>Proyecto</dt><dd>${escapeHtml(projectText)}</dd></div>
+          ${requisition.budget_cap ? `<div><dt>Presupuesto Máximo</dt><dd>${formatCurrency(requisition.budget_cap)}</dd></div>` : ''}
           <div><dt>Versión del documento</dt><dd>v${requisition.version || 1} — ${escapeHtml(requisition.original_filename)}</dd></div>
           <div><dt>Radicada por</dt><dd>${escapeHtml(requisition.uploader_name)}${requisition.uploader_territory ? ` (${escapeHtml(requisition.uploader_territory)})` : ''}</dd></div>
           <div><dt>Fecha de radicación</dt><dd>${formatDate(requisition.created_at)}</dd></div>
@@ -208,7 +213,20 @@ export async function render(container, params, ctx) {
   `;
 }
 
+async function downloadWith(t, fn, busyLabel) {
+  const restore = setButtonBusy(t, busyLabel);
+  try {
+    await fn(t.dataset.id);
+  } catch (err) {
+    showToast(err.message || 'No se pudo generar el archivo', 'error');
+  } finally {
+    restore();
+  }
+}
+
 export const actions = {
   'print-acta': () => window.print(),
   'back-to-detail': (t) => navigate('requisition-detail', { id: t.dataset.id }),
+  'download-acta-consolidada': (t) => downloadWith(t, API.downloadActaConsolidada, 'Generando...'),
+  'download-expediente': (t) => downloadWith(t, API.downloadExpediente, 'Comprimiendo...'),
 };

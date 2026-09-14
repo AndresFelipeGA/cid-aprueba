@@ -186,6 +186,7 @@ async function seedApprovedRequisition() {
   const created = await api(coord, 'POST', '/requisitions', pdfForm({
     title: `E2E Aprobada ${Date.now()}`,
     description: 'Sembrada por la prueba de humo para el acta',
+    budget_cap: 5000000,
   }, 'acta.pdf'));
   const req = created.data.requisition;
   if (req.current_approval_level !== 2 || req.status !== 'in_review') {
@@ -241,7 +242,10 @@ async function run(page) {
   await expectVisible(page, '#req-search', 'requisitions search box');
   await expectAttached(page, '#req-filter-level option[value="7"]', 'step filter populated from /api/meta');
   await expectAttached(page, '#req-filter-status option[value="returned"]', 'status filter built from meta.status_labels');
-  await expectVisible(page, '#btn-export-requisitions', 'Exportar CSV button');
+  await expectVisible(page, '#btn-export-csv', 'Exportar CSV button');
+  await expectVisible(page, '#btn-export-pdf', 'Exportar PDF button');
+  await expectVisible(page, '#req-filter-project', 'project filter');
+  await expectVisible(page, '#req-filter-from', 'date range filter');
   await expectVisible(page, '#req-table-container', 'requisitions table container');
   log('requisitions list rendered');
 
@@ -252,6 +256,7 @@ async function run(page) {
   const reqTitle = `E2E Requisición ${Date.now()}`;
   await page.fill('#upload-title', reqTitle);
   await page.fill('#upload-description', 'Creada por la prueba de humo');
+  await page.fill('#upload-budget-cap', '5000000');
   await page.setInputFiles('#upload-file', { name: 'e2e.pdf', mimeType: 'application/pdf', buffer: PDF });
   await expectVisible(page, '#file-name', 'selected file name');
   await page.click('#upload-btn');

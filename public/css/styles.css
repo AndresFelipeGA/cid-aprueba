@@ -391,6 +391,12 @@ img {
   margin-bottom: 9px;
 }
 
+.form__hint {
+  font-size: 0.8125rem;
+  color: var(--color-text-light);
+  margin-top: 6px;
+}
+
 .form__input {
   width: 100%;
   padding: 15px 21px;
@@ -2296,7 +2302,54 @@ textarea.form__input {
   box-shadow: 0 0 0 3px rgba(200, 90, 42, 0.1);
 }
 
+.search-filters__date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-filters__date-label {
+  font-size: 0.8125rem;
+  color: var(--color-text-light);
+  white-space: nowrap;
+}
+
+.search-filters__date {
+  padding: 9px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.search-filters__date:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(200, 90, 42, 0.1);
+}
+
+.search-filters__export-group {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
 @media (max-width: 768px) {
+  .search-filters__date-range {
+    flex-wrap: wrap;
+  }
+
+  .search-filters__export-group {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .search-filters__export-group .btn {
+    flex: 1;
+  }
+
   .search-filters {
     flex-direction: column;
     align-items: stretch;
@@ -3637,17 +3690,6 @@ body,
 
 .pending-item__tag {
   margin-left: 6px;
-}
-
-/* --- Filters: export button --- */
-.search-filters__export {
-  margin-left: auto;
-}
-
-@media (max-width: 768px) {
-  .search-filters__export {
-    margin-left: 0;
-  }
 }
 
 /* --- Acta de aprobación --- */

@@ -21,6 +21,7 @@ const migrations = [
   require('./005_indexes'),
   require('./006_returns_amounts_numbering'),
   require('./007_payment_document'),
+  require('./008_budget_cap'),
 ];
 
 /**

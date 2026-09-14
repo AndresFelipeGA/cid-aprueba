@@ -8,10 +8,11 @@ const YEAR = new Date().getFullYear();
 const tokens = {};
 
 /** Radicar a requisition as the territory coordinator and return it. */
-async function createRequisition(title) {
+async function createRequisition(title, budgetCap = 10000000) {
   const res = await as(tokens.coord)
     .post('/api/requisitions')
     .field('title', title)
+    .field('budget_cap', String(budgetCap))
     .attach('file', PDF, 'solicitud.pdf');
   assert.equal(res.status, 201, res.body.message);
   return res.body.data.requisition;
@@ -80,6 +81,26 @@ describe('Approval workflow', () => {
     const res = await approve('financiera', id);
     assert.equal(res.status, 403);
     assert.equal(res.body.error, 'FORBIDDEN');
+  });
+
+  it('requires a budget cap when radicating, and rejects quotations that exceed it', async () => {
+    const noCap = await as(tokens.coord).post('/api/requisitions')
+      .field('title', 'Sin presupuesto').attach('file', PDF, 'r.pdf');
+    assert.equal(noCap.status, 400);
+
+    const req = await createRequisition('Con presupuesto', 1000000);
+    assert.equal(req.budget_cap, 1000000);
+    await approve('director', req.id);
+    await approve('legal', req.id); // step 4
+
+    const tooHigh = await as(tokens.compras).post(`/api/requisitions/${req.id}/quotations`)
+      .field('provider_name', 'Muy caro').field('amount', '1500000').attach('file', PDF, 'c.pdf');
+    assert.equal(tooHigh.status, 400);
+    assert.equal(tooHigh.body.error, 'AMOUNT_EXCEEDS_BUDGET_CAP');
+
+    const ok = await as(tokens.compras).post(`/api/requisitions/${req.id}/quotations`)
+      .field('provider_name', 'Dentro del tope').field('amount', '1000000').attach('file', PDF, 'c.pdf');
+    assert.equal(ok.status, 201, ok.body.message);
   });
 
   it('runs the full chain, requiring a priced, complete quotation at step 4', async () => {
@@ -243,4 +264,65 @@ describe('Approval workflow', () => {
     assert.equal(logs.status, 200);
     assert.match(logs.text, /Devolvió/);
   });
+
+  it('respects an explicit ids filter on export (e.g. the caller\'s current on-screen filter), still bounded by visibility', async () => {
+    const a = await createRequisition('Filtro A');
+    const b = await createRequisition('Filtro B');
+
+    const onlyA = await as(tokens.coord).get(`/api/requisitions/export.csv?ids=${a.id}`);
+    assert.match(onlyA.text, new RegExp(a.number));
+    assert.doesNotMatch(onlyA.text, new RegExp(b.number));
+
+    // An empty ids filter (everything filtered out on screen) exports nothing but the header
+    const none = await as(tokens.coord).get('/api/requisitions/export.csv?ids=');
+    assert.equal(none.text.trim().split('\n').length, 1);
+
+    // Can't smuggle in a requisition outside the caller's visibility via ids
+    const asLegal = await as(tokens.legal).get(`/api/requisitions/export.csv?ids=${a.id}`);
+    assert.doesNotMatch(asLegal.text, new RegExp(a.number));
+
+    const pdf = await as(tokens.coord).get(`/api/requisitions/export.pdf?ids=${a.id},${b.id}`).buffer(true).parse(binaryParser);
+    assert.equal(pdf.status, 200);
+    assert.match(pdf.headers['content-type'], /application\/pdf/);
+    assert.equal(pdf.body.slice(0, 4).toString(), '%PDF');
+  });
+
+  it('generates a consolidated acta PDF and a document ZIP only once approved', async () => {
+    const { id } = await createRequisition('Acta consolidada');
+
+    const early = await as(tokens.director).get(`/api/requisitions/${id}/acta-consolidada.pdf`);
+    assert.equal(early.status, 400);
+    assert.equal((await as(tokens.director).get(`/api/requisitions/${id}/expediente.zip`)).status, 400);
+
+    await approve('director', id);
+    await approve('legal', id);
+    await addCompleteQuotation(id, 'Proveedor Acta', 1234567);
+    await approve('compras', id);
+    await approve('legal', id); // step 6
+    await as(tokens.financiera).post(`/api/requisitions/${id}/payment-document`).attach('file', PDF, 'pago.pdf');
+    await approve('financiera', id);
+    await approve('revisor', id);
+
+    const pdf = await as(tokens.revisor).get(`/api/requisitions/${id}/acta-consolidada.pdf`).buffer(true).parse(binaryParser);
+    assert.equal(pdf.status, 200);
+    assert.match(pdf.headers['content-type'], /application\/pdf/);
+    assert.match(pdf.headers['content-disposition'], /acta-consolidada.*\.pdf/);
+    assert.equal(pdf.body.slice(0, 4).toString(), '%PDF');
+
+    const zip = await as(tokens.revisor).get(`/api/requisitions/${id}/expediente.zip`).buffer(true).parse(binaryParser);
+    assert.equal(zip.status, 200);
+    assert.match(zip.headers['content-type'], /application\/zip/);
+    assert.equal(zip.body.slice(0, 2).toString(), 'PK');
+
+    // Not visible yet to a role that hasn't reached this requisition
+    const { id: other } = await createRequisition('Aún sin terminar');
+    assert.equal((await as(tokens.revisor).get(`/api/requisitions/${other}/acta-consolidada.pdf`)).status, 403);
+  });
 });
+
+function binaryParser(res, callback) {
+  res.setEncoding('binary');
+  let data = '';
+  res.on('data', (chunk) => { data += chunk; });
+  res.on('end', () => callback(null, Buffer.from(data, 'binary')));
+}
