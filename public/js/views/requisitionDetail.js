@@ -9,6 +9,7 @@ import { state } from '../state.js';
 import { escapeHtml, formatDate, formatDateShort, formatCurrency, formatPercent } from '../utils/format.js';
 import {
   statusBadge, statusLabel, actionLabel, stepLabel, stepRole, roleNameForStep, docTypes, acceptAttr, firstApprovalLevel,
+  paymentStep, paymentDocType, paymentDocLabel,
 } from '../meta.js';
 import { navigate, hrefFor } from '../router.js';
 import { showToast } from '../ui/toast.js';
@@ -246,6 +247,50 @@ function renderComparisonTable(quotations) {
   `;
 }
 
+/** Step 6 (Área Financiera): attach/preview/remove the payment proof on the selected quotation. */
+function renderPaymentPanel(requisition, quotations) {
+  const selected = quotations.find((q) => q.id === requisition.selected_quotation_id);
+  if (!selected) {
+    return '<div class="alert alert--error">No hay una cotización seleccionada para esta requisición.</div>';
+  }
+
+  const reqId = requisition.id;
+  const qId = selected.id;
+  const doc = (selected.documents || []).find((d) => d.doc_type === paymentDocType());
+  const label = escapeHtml(paymentDocLabel());
+
+  let inner;
+  if (doc) {
+    const docName = escapeHtml(doc.original_filename);
+    inner = `
+      <div class="quotation-card__doc-item">
+        <span class="quotation-card__doc-status quotation-card__doc-status--complete quotation-card__doc-filename" role="button" tabindex="0" data-action="preview-quotation-doc" data-req-id="${reqId}" data-quotation-id="${qId}" data-doc-id="${doc.id}" data-filename="${docName}" title="Clic para vista previa">✅ ${docName}</span>
+        <div class="quotation-card__actions">
+          <button class="btn btn--outline btn--sm" data-action="preview-quotation-doc" data-req-id="${reqId}" data-quotation-id="${qId}" data-doc-id="${doc.id}" data-filename="${docName}">Ver</button>
+          <button class="btn btn--danger btn--sm" data-action="delete-payment-doc" data-req-id="${reqId}" data-doc-id="${doc.id}">Eliminar</button>
+        </div>
+      </div>
+    `;
+  } else {
+    inner = `
+      <div class="quotation-card__doc-item">
+        <span class="quotation-card__doc-status quotation-card__doc-status--missing">❌ Sin comprobante adjunto</span>
+        <label class="btn btn--outline btn--sm quotation-card__attach-btn">
+          Adjuntar
+          <input type="file" class="hidden" data-action="attach-payment-doc" data-req-id="${reqId}" accept="${acceptAttr()}">
+        </label>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="payment-document" id="payment-document" style="margin-bottom: 16px;">
+      <label class="form__label">${label} — ${escapeHtml(selected.provider_name)} (${formatCurrency(selected.amount)})</label>
+      ${inner}
+    </div>
+  `;
+}
+
 // --- Approval panel (levels ≥ first_approval_level) ---
 
 function renderApprovalPanel(requisition, quotations) {
@@ -270,6 +315,8 @@ function renderApprovalPanel(requisition, quotations) {
     `;
   } else if (isSelectionStep) {
     html += '<div class="alert alert--error">No hay cotizaciones disponibles para seleccionar. El paso anterior debe agregar cotizaciones.</div>';
+  } else if (level === paymentStep()) {
+    html += renderPaymentPanel(requisition, quotations);
   }
 
   const option = (key, checked) => `
@@ -846,6 +893,30 @@ async function deleteQuotationDoc(requisitionId, quotationId, docId) {
   }
 }
 
+async function attachPaymentDoc(requisitionId, fileInput) {
+  if (!fileInput || !fileInput.files || fileInput.files.length === 0) return;
+
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+
+  try {
+    await API.uploadPaymentDocument(requisitionId, formData);
+    navigate('requisition-detail', { id: requisitionId });
+  } catch (err) {
+    showToast(err.message || 'Error al adjuntar el comprobante de pago', 'error');
+  }
+}
+
+async function deletePaymentDoc(requisitionId, docId) {
+  if (!(await confirmDialog('¿Está seguro de eliminar el comprobante de pago?'))) return;
+  try {
+    await API.deletePaymentDocument(requisitionId, docId);
+    navigate('requisition-detail', { id: requisitionId });
+  } catch (err) {
+    showToast(err.message || 'Error al eliminar el comprobante de pago', 'error');
+  }
+}
+
 // --- data-action handlers (click) ---
 
 export const actions = {
@@ -866,11 +937,13 @@ export const actions = {
   'submit-quotation': (t) => submitQuotation(t.dataset.reqId),
   'delete-quotation': (t) => deleteQuotation(t.dataset.reqId, t.dataset.quotationId),
   'delete-quotation-doc': (t) => deleteQuotationDoc(t.dataset.reqId, t.dataset.quotationId, t.dataset.docId),
+  'delete-payment-doc': (t) => deletePaymentDoc(t.dataset.reqId, t.dataset.docId),
 };
 
 // --- data-action handlers (change) ---
 
 export const changeActions = {
   'attach-quotation-doc': (t) => attachQuotationDoc(t.dataset.reqId, t.dataset.quotationId, t.dataset.docType, t),
+  'attach-payment-doc': (t) => attachPaymentDoc(t.dataset.reqId, t),
   'approval-option': () => updateApprovalControls(),
 };

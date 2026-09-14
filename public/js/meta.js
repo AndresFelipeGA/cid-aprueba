@@ -69,6 +69,18 @@ export function docTypes() {
   return Object.entries(meta().doc_types || {}).map(([key, label]) => ({ key, label }));
 }
 
+export function paymentStep() {
+  return meta().payment_step || 6;
+}
+
+export function paymentDocType() {
+  return meta().payment_doc_type || 'comprobante_pago';
+}
+
+export function paymentDocLabel() {
+  return meta().payment_doc_label || 'Comprobante de Pago';
+}
+
 /** Comma-separated extension list for <input type="file" accept>. */
 export function acceptAttr() {
   const exts = meta().allowed_extensions || ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png'];

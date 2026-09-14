@@ -232,6 +232,14 @@ export function downloadQuotationDocument(requisitionId, quotationId, documentId
   return request('GET', `/requisitions/${requisitionId}/quotations/${quotationId}/documents/${documentId}/download`);
 }
 
+export function uploadPaymentDocument(requisitionId, formData) {
+  return request('POST', `/requisitions/${requisitionId}/payment-document`, formData, true);
+}
+
+export function deletePaymentDocument(requisitionId, documentId) {
+  return request('DELETE', `/requisitions/${requisitionId}/payment-document/${documentId}`);
+}
+
 // --- Projects ---
 
 export function getProjects() {

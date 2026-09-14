@@ -8,6 +8,7 @@ const asyncHandler = require('../middleware/asyncHandler');
 const { idParam } = require('../middleware/validators');
 const { createUploader, fixUploadFilename } = require('../middleware/upload');
 const { requireQuotationStage, loadQuotation, loadDocument } = require('../middleware/quotationStage');
+const { requirePaymentStage } = require('../middleware/paymentStage');
 const { QUOTATION_DOC_TYPES } = require('../config/workflow');
 
 const router = express.Router();
@@ -15,6 +16,7 @@ const upload = createUploader('quotations');
 
 const DOC_TYPES = Object.keys(QUOTATION_DOC_TYPES);
 const PURCHASING = 4; // Encargado/a de Compras
+const FINANCE = 5; // Área Financiera
 
 router.use(authenticate);
 
@@ -80,6 +82,31 @@ router.delete(
   [idParam('requisitionId'), idParam('quotationId'), idParam('documentId')],
   validate,
   requireQuotationStage,
+  loadQuotation,
+  loadDocument,
+  asyncHandler(quotationController.deleteDocument),
+);
+
+// POST /api/requisitions/:requisitionId/payment-document — Área Financiera adjunta el comprobante de pago
+router.post(
+  '/:requisitionId/payment-document',
+  authorize(FINANCE),
+  upload.single('file'),
+  fixUploadFilename,
+  [idParam('requisitionId')],
+  validate,
+  requirePaymentStage,
+  loadQuotation,
+  asyncHandler(quotationController.uploadPaymentDocument),
+);
+
+// DELETE /api/requisitions/:requisitionId/payment-document/:documentId
+router.delete(
+  '/:requisitionId/payment-document/:documentId',
+  authorize(FINANCE),
+  [idParam('requisitionId'), idParam('documentId')],
+  validate,
+  requirePaymentStage,
   loadQuotation,
   loadDocument,
   asyncHandler(quotationController.deleteDocument),

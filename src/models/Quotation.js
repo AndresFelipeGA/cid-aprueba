@@ -2,9 +2,10 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../config/database');
 const AppError = require('../utils/AppError');
-const { CURRENCY } = require('../config/workflow');
+const { CURRENCY, QUOTATION_DOC_TYPES } = require('../config/workflow');
 
 const MAX_QUOTATIONS = 3;
+const REQUIRED_DOC_TYPES = Object.keys(QUOTATION_DOC_TYPES);
 
 const Quotation = {
   MAX_QUOTATIONS,
@@ -126,12 +127,16 @@ const Quotation = {
   },
 
   hasCompleteQuotation(requisitionId) {
+    const placeholders = REQUIRED_DOC_TYPES.map(() => '?').join(',');
     const result = db.prepare(`
       SELECT q.id FROM quotations q
       WHERE q.requisition_id = ?
-        AND (SELECT COUNT(DISTINCT qd.doc_type) FROM quotation_documents qd WHERE qd.quotation_id = q.id) = 4
+        AND (
+          SELECT COUNT(DISTINCT qd.doc_type) FROM quotation_documents qd
+          WHERE qd.quotation_id = q.id AND qd.doc_type IN (${placeholders})
+        ) = ?
       LIMIT 1
-    `).get(requisitionId);
+    `).get(requisitionId, ...REQUIRED_DOC_TYPES, REQUIRED_DOC_TYPES.length);
     return !!result;
   },
 

@@ -21,6 +21,9 @@ router.get('/', (_req, res) => {
       currency: workflow.CURRENCY,
       doc_types: workflow.QUOTATION_DOC_TYPES,
       allowed_extensions: workflow.ALLOWED_UPLOAD_EXTENSIONS,
+      payment_step: workflow.PAYMENT_STEP,
+      payment_doc_type: workflow.PAYMENT_DOC_TYPE,
+      payment_doc_label: workflow.PAYMENT_DOC_LABEL,
     },
     message: null,
   });

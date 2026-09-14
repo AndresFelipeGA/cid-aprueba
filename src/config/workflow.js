@@ -77,6 +77,11 @@ const QUOTATION_DOC_TYPES = Object.freeze({
   certificado_bancario: 'Certificado Bancario',
 });
 
+/** Step where Área Financiera can attach proof of payment to the selected quotation. */
+const PAYMENT_STEP = 6;
+const PAYMENT_DOC_TYPE = 'comprobante_pago';
+const PAYMENT_DOC_LABEL = 'Comprobante de Pago';
+
 const ALLOWED_UPLOAD_EXTENSIONS = Object.freeze(['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png']);
 
 module.exports = {
@@ -93,4 +98,7 @@ module.exports = {
   CURRENCY,
   QUOTATION_DOC_TYPES,
   ALLOWED_UPLOAD_EXTENSIONS,
+  PAYMENT_STEP,
+  PAYMENT_DOC_TYPE,
+  PAYMENT_DOC_LABEL,
 };

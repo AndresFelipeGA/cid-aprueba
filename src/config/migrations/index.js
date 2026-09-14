@@ -20,6 +20,7 @@ const migrations = [
   require('./004_projects'),
   require('./005_indexes'),
   require('./006_returns_amounts_numbering'),
+  require('./007_payment_document'),
 ];
 
 /**

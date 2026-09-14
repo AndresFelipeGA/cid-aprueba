@@ -112,6 +112,43 @@ describe('Approval workflow', () => {
     assert.equal((await approve('revisor', id)).body.error, 'ALREADY_APPROVED');
   });
 
+  it('lets Área Financiera attach and remove a payment proof only at step 6, on the selected quotation', async () => {
+    const { id } = await createRequisition('Comprobante de pago');
+    await approve('director', id);
+    await approve('legal', id);
+    const quotationId = await addCompleteQuotation(id, 'Proveedor Pago', 500000);
+    await approve('compras', id);
+    await approve('legal', id); // step 6, selects the only quotation
+
+    // Wrong role, or too early/late, cannot upload
+    assert.equal(
+      (await as(tokens.compras).post(`/api/requisitions/${id}/payment-document`).attach('file', PDF, 'pago.pdf')).status,
+      403,
+    );
+
+    const uploaded = await as(tokens.financiera).post(`/api/requisitions/${id}/payment-document`).attach('file', PDF, 'pago.pdf');
+    assert.equal(uploaded.status, 201, uploaded.body.message);
+    const docId = uploaded.body.data.document.id;
+    assert.equal(uploaded.body.data.document.doc_type, 'comprobante_pago');
+
+    const afterUpload = await detail('financiera', id);
+    const quotation = afterUpload.body.data.requisition.quotations.find((q) => q.id === quotationId);
+    assert.ok(quotation.documents.some((d) => d.id === docId));
+
+    // Duplicate upload is rejected; delete then re-upload works
+    assert.equal(
+      (await as(tokens.financiera).post(`/api/requisitions/${id}/payment-document`).attach('file', PDF, 'pago2.pdf')).status,
+      400,
+    );
+    assert.equal((await as(tokens.financiera).delete(`/api/requisitions/${id}/payment-document/${docId}`)).status, 200);
+
+    await approve('financiera', id); // step 7 now — upload window is closed
+    assert.equal(
+      (await as(tokens.financiera).post(`/api/requisitions/${id}/payment-document`).attach('file', PDF, 'tarde.pdf')).status,
+      400,
+    );
+  });
+
   it('returns a requisition one step back; the previous approver re-approves', async () => {
     const { id } = await createRequisition('Devolver un paso');
     await approve('director', id);                               // now at step 3 (legal)

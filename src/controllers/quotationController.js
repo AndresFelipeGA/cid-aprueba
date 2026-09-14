@@ -5,6 +5,7 @@ const QuotationDocument = require('../models/QuotationDocument');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 const config = require('../config/env');
+const { PAYMENT_DOC_TYPE } = require('../config/workflow');
 const { loadVisibleRequisition } = require('./requisitionController');
 
 /**
@@ -88,6 +89,24 @@ const quotationController = {
     logger.info(`Quotation document uploaded: docId=${document.id}, quotationId=${req.quotation.id}, type=${docType}, userId=${req.user.id}`);
 
     res.status(201).json({ success: true, data: { document }, message: 'Documento subido exitosamente' });
+  },
+
+  /** Área Financiera attaches proof of payment to the selected quotation (guarded by requirePaymentStage). */
+  uploadPaymentDocument(req, res) {
+    if (!req.file) {
+      throw new AppError('El archivo es requerido', 400, 'FILE_REQUIRED');
+    }
+
+    const document = QuotationDocument.create({
+      quotationId: req.quotation.id,
+      docType: PAYMENT_DOC_TYPE,
+      filePath: storeQuotationFile(req.file, req.requisition.id, PAYMENT_DOC_TYPE),
+      originalFilename: req.file.originalname,
+    });
+
+    logger.info(`Payment document uploaded: docId=${document.id}, quotationId=${req.quotation.id}, reqId=${req.requisition.id}, userId=${req.user.id}`);
+
+    res.status(201).json({ success: true, data: { document }, message: 'Comprobante de pago subido exitosamente' });
   },
 
   deleteDocument(req, res) {
