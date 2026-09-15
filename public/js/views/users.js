@@ -55,7 +55,7 @@ export async function render(container, _params, ctx) {
           </div>
           <div class="form__group">
             <label class="form__label" for="create-password">Contraseña</label>
-            <input class="form__input" type="password" id="create-password" required minlength="6" placeholder="Mínimo 6 caracteres">
+            <input class="form__input" type="password" id="create-password" required minlength="8" placeholder="Mínimo 8 caracteres">
           </div>
           <div class="form__group">
             <label class="form__label" for="create-fullname">Nombre Completo</label>
@@ -136,7 +136,7 @@ export async function render(container, _params, ctx) {
         <input type="hidden" id="reset-password-user-id">
         <div class="form__group">
           <label class="form__label" for="reset-password-input">Nueva Contraseña</label>
-          <input class="form__input" type="password" id="reset-password-input" required minlength="6" placeholder="Mínimo 6 caracteres">
+          <input class="form__input" type="password" id="reset-password-input" required minlength="8" placeholder="Mínimo 8 caracteres">
         </div>
         <div class="user-form-actions">
           <button class="btn btn--primary" type="submit" id="reset-password-btn">Restablecer</button>
@@ -273,8 +273,8 @@ async function handleCreateUser(e) {
     setFeedback(feedback, 'error', 'Todos los campos obligatorios deben ser completados');
     return;
   }
-  if (password.length < 6) {
-    setFeedback(feedback, 'error', 'La contraseña debe tener al menos 6 caracteres');
+  if (password.length < 8) {
+    setFeedback(feedback, 'error', 'La contraseña debe tener al menos 8 caracteres');
     return;
   }
 
@@ -338,8 +338,8 @@ async function handleResetPassword(e) {
   const password = $('#reset-password-input').value;
   const feedback = $('#reset-password-feedback');
 
-  if (!password || password.length < 6) {
-    setFeedback(feedback, 'error', 'La contraseña debe tener al menos 6 caracteres');
+  if (!password || password.length < 8) {
+    setFeedback(feedback, 'error', 'La contraseña debe tener al menos 8 caracteres');
     return;
   }
 

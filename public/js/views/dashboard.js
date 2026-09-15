@@ -129,11 +129,13 @@ function buildBarChart(byStep) {
     const label = stepLabel(step);
     rows += `
       <div class="bar-row${isZero ? ' bar-row--zero' : ''}">
-        <span class="bar-label" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+        <div class="bar-row__top">
+          <span class="bar-label">${escapeHtml(label)}</span>
+          <span class="bar-count${isZero ? ' bar-count--zero' : ''}">${count}</span>
+        </div>
         <div class="bar-track">
           <div class="bar-fill" data-target-pct="${pct}" style="width: 0%"></div>
         </div>
-        <span class="bar-count${isZero ? ' bar-count--zero' : ''}">${count}</span>
       </div>
     `;
   }
