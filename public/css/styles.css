@@ -21,10 +21,11 @@
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --radius: 6px;
   --radius-lg: 10px;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
-  --transition: 0.2s ease;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 1px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.06), 0 6px 16px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.08), 0 12px 28px rgba(0, 0, 0, 0.12);
+  --transition: 0.18s var(--ease);
 
   --sidebar-width: 220px;
   --header-height: 52px;
@@ -56,10 +57,16 @@ body {
 a {
   color: var(--color-primary);
   text-decoration: none;
+  transition: color var(--transition);
 }
 
 a:hover {
   color: var(--color-accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 button {
@@ -102,8 +109,13 @@ img {
   font-weight: 500;
   font-size: 0.875rem;
   line-height: 1;
-  transition: background-color var(--transition), opacity var(--transition);
+  transition: background-color var(--transition), opacity var(--transition),
+    transform var(--transition), box-shadow var(--transition);
   white-space: nowrap;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .btn:disabled {
@@ -499,7 +511,9 @@ textarea.form__input {
   display: flex;
   align-items: center;
   gap: 10px;
+  margin: 1px 8px 1px 0;
   padding: 8px 20px;
+  border-radius: 0 var(--radius) var(--radius) 0;
   color: var(--color-text-light);
   font-size: 0.9375rem;
   font-weight: 400;
@@ -619,6 +633,12 @@ textarea.form__input {
   padding: 14px 18px;
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--color-border);
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+
+.stat-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
 
 .stat-card__label {
@@ -707,7 +727,7 @@ textarea.form__input {
 }
 
 .table tbody tr:hover {
-  background-color: rgba(200, 90, 42, 0.02);
+  background-color: rgba(200, 90, 42, 0.035);
 }
 
 .table tbody tr:last-child td {
