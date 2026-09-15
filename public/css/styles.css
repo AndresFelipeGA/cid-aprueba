@@ -2508,7 +2508,17 @@ textarea.form__input {
   margin-top: 1px;
 }
 
-.toast--success .toast__icon { color: var(--color-secondary); }
+.toast--success .toast__icon {
+  color: var(--color-secondary);
+  animation: toast-icon-pop 0.45s var(--ease) 0.1s backwards;
+}
+
+@keyframes toast-icon-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
 .toast--error .toast__icon { color: var(--color-danger); }
 .toast--warning .toast__icon { color: var(--color-primary); }
 .toast--info .toast__icon { color: var(--color-accent); }
@@ -3495,11 +3505,21 @@ body,
   border-radius: var(--radius);
   cursor: pointer;
   font-size: 0.9rem;
-  transition: border-color var(--transition), background-color var(--transition);
+  transition: border-color var(--transition), background-color var(--transition), transform var(--transition);
 }
 
 .approval-options__option:hover {
   border-color: var(--color-text-light);
+}
+
+.approval-options__option:has(input:checked) {
+  animation: option-settle 0.28s var(--ease);
+}
+
+@keyframes option-settle {
+  0% { transform: scale(0.98); }
+  50% { transform: scale(1.008); }
+  100% { transform: scale(1); }
 }
 
 .approval-options__option--approve:has(input:checked) {
