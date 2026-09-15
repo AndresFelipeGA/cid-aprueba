@@ -193,7 +193,7 @@ export async function render(container, _params, ctx) {
           <div class="user-actions">
             <button class="btn btn--outline btn--sm" data-action="edit-user" data-user='${escapeHtml(JSON.stringify(u))}' aria-label="Editar ${escapeHtml(u.username)}">✏️ Editar</button>
             <button class="btn btn--outline btn--sm" data-action="reset-user-password" data-user-id="${u.id}" data-username="${escapeHtml(u.username)}" aria-label="Restablecer contraseña de ${escapeHtml(u.username)}">🔑 Contraseña</button>
-            <button class="btn btn--sm ${u.is_active ? 'btn--warning' : 'btn--secondary'}" data-action="toggle-user-active" data-user-id="${u.id}" data-username="${escapeHtml(u.username)}" data-active="${u.is_active ? '1' : '0'}" aria-label="${u.is_active ? 'Desactivar' : 'Activar'} ${escapeHtml(u.username)}">${u.is_active ? '🚫 Desactivar' : '✅ Activar'}</button>
+            <button class="btn btn--sm btn--outline ${u.is_active ? 'btn--warning-outline' : 'btn--success-outline'}" data-action="toggle-user-active" data-user-id="${u.id}" data-username="${escapeHtml(u.username)}" data-active="${u.is_active ? '1' : '0'}" aria-label="${u.is_active ? 'Desactivar' : 'Activar'} ${escapeHtml(u.username)}">${u.is_active ? 'Desactivar' : 'Activar'}</button>
           </div>`,
       },
     ],

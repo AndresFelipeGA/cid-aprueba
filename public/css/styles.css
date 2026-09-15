@@ -1534,7 +1534,7 @@ textarea.form__input {
   border: 1px solid var(--color-border);
   padding: 32px;
   width: 100%;
-  max-width: 500px;
+  max-width: 620px;
 }
 
 .profile__title {
@@ -3431,6 +3431,28 @@ body,
 
 .btn--warning:hover:not(:disabled) {
   background-color: #8f6508;
+}
+
+.btn--warning-outline {
+  background-color: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-warning-dark);
+}
+
+.btn--warning-outline:hover:not(:disabled) {
+  border-color: var(--color-warning-dark);
+  background-color: rgba(179, 127, 10, 0.08);
+}
+
+.btn--success-outline {
+  background-color: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-secondary);
+}
+
+.btn--success-outline:hover:not(:disabled) {
+  border-color: var(--color-secondary);
+  background-color: rgba(107, 142, 35, 0.08);
 }
 
 /* --- Badges & tags --- */
