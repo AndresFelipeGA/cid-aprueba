@@ -26,8 +26,8 @@
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
   --transition: 0.2s ease;
 
-  --sidebar-width: 240px;
-  --header-height: 60px;
+  --sidebar-width: 220px;
+  --header-height: 52px;
 }
 
 /* --- Reset --- */
@@ -40,7 +40,7 @@
 }
 
 html {
-  font-size: 16px;
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -97,7 +97,7 @@ img {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 20px;
+  padding: 8px 16px;
   border-radius: var(--radius);
   font-weight: 500;
   font-size: 0.875rem;
@@ -380,15 +380,15 @@ img {
 
 /* --- Forms --- */
 .form__group {
-  margin-bottom: 28px;
+  margin-bottom: 18px;
 }
 
 .form__label {
   display: block;
-  font-size: 1.075rem;
+  font-size: 0.9375rem;
   font-weight: 500;
   color: var(--color-text);
-  margin-bottom: 9px;
+  margin-bottom: 6px;
 }
 
 .form__hint {
@@ -399,8 +399,8 @@ img {
 
 .form__input {
   width: 100%;
-  padding: 15px 21px;
-  font-size: 1.15rem;
+  padding: 10px 14px;
+  font-size: 0.9375rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
@@ -448,13 +448,13 @@ textarea.form__input {
 }
 
 .sidebar__brand {
-  padding: 20px 24px;
+  padding: 14px 20px;
   border-bottom: 1px solid var(--color-border);
 }
 
 .sidebar__logo-img {
   display: block;
-  max-width: 168px;
+  max-width: 140px;
   height: auto;
   margin: 0 auto 6px;
 }
@@ -499,7 +499,7 @@ textarea.form__input {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 24px;
+  padding: 8px 20px;
   color: var(--color-text-light);
   font-size: 0.9375rem;
   font-weight: 400;
@@ -527,7 +527,7 @@ textarea.form__input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 28px;
+  padding: 0 20px;
 }
 
 .header__left {
@@ -588,7 +588,7 @@ textarea.form__input {
 /* --- Main Content --- */
 .main {
   grid-area: main;
-  padding: 28px;
+  padding: 20px;
   overflow-y: auto;
 }
 
@@ -596,11 +596,11 @@ textarea.form__input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 .main__title {
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: 600;
   color: var(--color-text);
 }
@@ -609,29 +609,29 @@ textarea.form__input {
 .stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-  margin-bottom: 32px;
+  gap: 14px;
+  margin-bottom: 22px;
 }
 
 .stat-card {
   background: var(--color-surface);
   border-radius: var(--radius-lg);
-  padding: 20px 24px;
+  padding: 14px 18px;
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--color-border);
 }
 
 .stat-card__label {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   color: var(--color-text-light);
   font-weight: 400;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .stat-card__value {
-  font-size: 2rem;
+  font-size: 1.6rem;
   font-weight: 700;
   line-height: 1;
 }
@@ -654,7 +654,7 @@ textarea.form__input {
 
 /* --- Section --- */
 .section {
-  margin-bottom: 32px;
+  margin-bottom: 22px;
 }
 
 .section__title {
@@ -682,7 +682,7 @@ textarea.form__input {
 
 .table th {
   text-align: left;
-  padding: 12px 16px;
+  padding: 9px 14px;
   font-weight: 600;
   color: var(--color-text-light);
   font-size: 0.75rem;
@@ -697,7 +697,7 @@ textarea.form__input {
 }
 
 .table td {
-  padding: 12px 16px;
+  padding: 9px 14px;
   border-bottom: 1px solid var(--color-border);
   color: var(--color-text);
 }
@@ -777,7 +777,7 @@ textarea.form__input {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--color-border);
-  padding: 24px;
+  padding: 18px;
 }
 
 .req-detail__title {
@@ -844,7 +844,7 @@ textarea.form__input {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--color-border);
-  padding: 24px;
+  padding: 18px;
 }
 
 .timeline__title {
@@ -945,7 +945,7 @@ textarea.form__input {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--color-border);
-  padding: 24px;
+  padding: 18px;
 }
 
 .approval-panel__title {
@@ -1089,7 +1089,7 @@ textarea.form__input {
   align-items: center;
   gap: 8px;
   margin-bottom: 16px;
-  padding: 24px;
+  padding: 18px;
 }
 
 .upload-preview__file-ext {
@@ -1572,7 +1572,7 @@ textarea.form__input {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--color-border);
-  padding: 24px;
+  padding: 18px;
 }
 
 .quotations-panel__header {
@@ -3508,7 +3508,7 @@ body,
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--color-border);
-  padding: 24px;
+  padding: 18px;
 }
 
 .versions-panel__title {
