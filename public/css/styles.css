@@ -98,6 +98,25 @@ img {
   display: none !important;
 }
 
+/* --- Scrollbar --- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-light);
+}
+
 /* --- Buttons --- */
 .btn {
   display: inline-flex;
@@ -366,6 +385,7 @@ img {
   max-width: 449px;
   position: relative;
   z-index: 1;
+  animation: modal-scale-in 0.35s var(--ease);
 }
 
 .login__brand {
@@ -1332,13 +1352,18 @@ textarea.form__input {
   border-radius: var(--radius);
   padding: 6px 14px;
   margin-bottom: 20px;
-  transition: background-color var(--transition), border-color var(--transition), color var(--transition);
+  transition: background-color var(--transition), border-color var(--transition), color var(--transition),
+    transform var(--transition);
 }
 
 .back-link:hover {
   color: var(--color-primary);
   border-color: var(--color-primary);
   background-color: rgba(200, 90, 42, 0.04);
+}
+
+.back-link:active {
+  transform: scale(0.97);
 }
 
 /* --- Mobile Menu Toggle --- */
@@ -1369,6 +1394,8 @@ textarea.form__input {
   width: 100%;
   height: 100%;
   background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  animation: modal-fade-in 0.18s var(--ease);
 }
 
 .modal__content {
@@ -1380,6 +1407,15 @@ textarea.form__input {
   width: 100%;
   max-width: 420px;
   z-index: 1;
+  animation: modal-scale-in 0.2s var(--ease);
+}
+
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes modal-scale-in {
+  from { opacity: 0; transform: scale(0.96) translateY(4px); }
 }
 
 .modal__title {
