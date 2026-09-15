@@ -12,12 +12,22 @@ export function roleDisplay(user) {
   return display;
 }
 
+function initials(fullName) {
+  if (!fullName) return '';
+  const parts = fullName.trim().split(/\s+/);
+  const first = parts[0]?.[0] || '';
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
+  return (first + last).toUpperCase();
+}
+
 export function updateHeaderUser(user) {
   if (!user) return;
   const nameEl = document.getElementById('user-name');
   const roleEl = document.getElementById('user-role');
+  const avatarEl = document.getElementById('user-avatar');
   if (nameEl) nameEl.textContent = user.full_name;
   if (roleEl) roleEl.textContent = roleDisplay(user);
+  if (avatarEl) avatarEl.textContent = initials(user.full_name);
 }
 
 export function setHeaderTitle(title) {

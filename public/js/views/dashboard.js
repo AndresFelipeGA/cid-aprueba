@@ -283,7 +283,7 @@ export async function render(container, _params, ctx) {
   // Pending for current user
   html += '<div class="section"><h3 class="section__title">Pendientes para ti</h3>';
   if (pendingRequisitions.length === 0) {
-    html += '<div class="empty">No tienes requisiciones pendientes por revisar</div>';
+    html += '<div class="empty empty--positive">No tienes requisiciones pendientes por revisar</div>';
   } else {
     html += `<div class="pending-list">${pendingRequisitions.map(renderPendingItem).join('')}</div>`;
   }
@@ -298,7 +298,7 @@ export async function render(container, _params, ctx) {
       </div>
   `;
   if (recentActivity.length === 0) {
-    html += '<div class="empty">No hay actividad reciente</div>';
+    html += '<div class="empty empty--neutral">No hay actividad reciente</div>';
   } else {
     const groups = groupActivityByRequisition(recentActivity);
     html += `<div class="activity-list">${groups.map(renderActivityGroup).join('')}</div>`;

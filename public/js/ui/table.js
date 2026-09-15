@@ -58,7 +58,7 @@ export function renderFilterableTable(opts) {
   const renderTable = (visibleRows) => {
     if (!tableContainer) return;
     if (visibleRows.length === 0) {
-      tableContainer.innerHTML = `<div class="empty">${escapeHtml(emptyText)}</div>`;
+      tableContainer.innerHTML = `<div class="empty empty--neutral">${escapeHtml(emptyText)}</div>`;
       return;
     }
 
