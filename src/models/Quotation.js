@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../config/database');
 const AppError = require('../utils/AppError');
-const { CURRENCY, QUOTATION_DOC_TYPES } = require('../config/workflow');
+const { CURRENCY, QUOTATION_DOC_TYPES, PAYMENT_DOC_TYPE } = require('../config/workflow');
 
 const MAX_QUOTATIONS = 3;
 const REQUIRED_DOC_TYPES = Object.keys(QUOTATION_DOC_TYPES);
@@ -187,6 +187,17 @@ const Quotation = {
     const result = db.prepare(`
       SELECT id FROM quotations WHERE requisition_id = ? AND status = 'selected' LIMIT 1
     `).get(requisitionId);
+    return !!result;
+  },
+
+  /** Whether the selected quotation already has the payment proof attached. */
+  hasPaymentDocument(requisitionId) {
+    const result = db.prepare(`
+      SELECT qd.id FROM quotations q
+      JOIN quotation_documents qd ON qd.quotation_id = q.id
+      WHERE q.requisition_id = ? AND q.status = 'selected' AND qd.doc_type = ?
+      LIMIT 1
+    `).get(requisitionId, PAYMENT_DOC_TYPE);
     return !!result;
   },
 };

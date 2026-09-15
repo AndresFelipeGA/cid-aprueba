@@ -64,6 +64,12 @@ function wrapText(font, text, size, maxWidth) {
   return lines;
 }
 
+const HEADING_COLOR = rgb(0.24, 0.35, 0.12);
+const MUTED_COLOR = rgb(0.45, 0.45, 0.45);
+const TEXT_COLOR = rgb(0.15, 0.15, 0.15);
+const BORDER_COLOR = rgb(0.87, 0.84, 0.78);
+const HEADER_FILL = rgb(0.95, 0.93, 0.88);
+
 /** Builds the acta cover document (facts, approval route, returns, quotations, signatures). */
 async function buildActaCoverPdf(requisition) {
   const doc = await PDFDocument.create();
@@ -87,74 +93,166 @@ async function buildActaCoverPdf(requisition) {
     }
   };
 
-  const draw = (text, { size = 10, useFont = font, gap = 14, color = rgb(0.1, 0.1, 0.1) } = {}) => {
-    for (const line of wrapText(useFont, text, size, width)) {
-      ensureSpace(gap);
-      page.drawText(line, { x: MARGIN, y, size, font: useFont, color });
-      y -= gap;
+  const heading = (text) => {
+    y -= 8;
+    ensureSpace(20);
+    page.drawText(text.toUpperCase(), { x: MARGIN, y, size: 11, font: bold, color: HEADING_COLOR });
+    y -= 6;
+    page.drawLine({ start: { x: MARGIN, y }, end: { x: MARGIN + width, y }, thickness: 0.75, color: HEADING_COLOR });
+    y -= 14;
+  };
+
+  /** Two-column label/value grid, like the HTML acta's <dl class="acta__facts">. */
+  const factsGrid = (pairs) => {
+    const colWidth = width / 2;
+    for (let i = 0; i < pairs.length; i += 2) {
+      const rowPairs = pairs.slice(i, i + 2);
+      ensureSpace(30);
+      rowPairs.forEach(([label], col) => {
+        page.drawText(label, { x: MARGIN + col * colWidth, y, size: 8, font: bold, color: MUTED_COLOR });
+      });
+      y -= 12;
+      rowPairs.forEach(([, value], col) => {
+        const text = truncate(font, value, 10, colWidth - 14);
+        page.drawText(text, { x: MARGIN + col * colWidth, y, size: 10, font, color: TEXT_COLOR });
+      });
+      y -= 18;
     }
   };
 
-  const heading = (text) => {
-    y -= 6;
-    ensureSpace(24);
-    draw(text, { size: 13, useFont: bold, gap: 18, color: rgb(0.24, 0.35, 0.12) });
-    y -= 2;
+  const paragraph = (text, { size = 9.5, color = TEXT_COLOR } = {}) => {
+    for (const line of wrapText(font, text, size, width)) {
+      ensureSpace(14);
+      page.drawText(line, { x: MARGIN, y, size, font, color });
+      y -= 13;
+    }
+  };
+
+  /** A simple bordered table: header row + body rows, columns sized in points. */
+  const table = (columns, rows) => {
+    const rowHeight = 20;
+    ensureSpace(rowHeight + 4);
+    let x = MARGIN;
+    page.drawRectangle({ x: MARGIN, y: y - rowHeight + 6, width, height: rowHeight, color: HEADER_FILL });
+    for (const col of columns) {
+      page.drawText(col.label, { x: x + 5, y: y - 8, size: 8, font: bold, color: rgb(0.2, 0.2, 0.2) });
+      x += col.width;
+    }
+    y -= rowHeight;
+
+    for (const row of rows) {
+      const lines = columns.map((col) => wrapText(font, col.get(row) ?? '—', 8, col.width - 10));
+      const lineCount = Math.max(1, ...lines.map((l) => l.length));
+      const cellHeight = Math.max(rowHeight, lineCount * 11 + 8);
+      ensureSpace(cellHeight);
+      x = MARGIN;
+      columns.forEach((col, i) => {
+        lines[i].forEach((line, li) => {
+          page.drawText(line, { x: x + 5, y: y - 9 - li * 11, size: 8, font, color: TEXT_COLOR });
+        });
+        x += col.width;
+      });
+      page.drawLine({ start: { x: MARGIN, y: y - cellHeight + 6 }, end: { x: MARGIN + width, y: y - cellHeight + 6 }, thickness: 0.5, color: BORDER_COLOR });
+      y -= cellHeight;
+    }
+    y -= 12;
   };
 
   const logo = await embedLogo(doc, 84);
   page.drawImage(logo.img, { x: MARGIN, y: y - logo.height, width: logo.width, height: logo.height });
-  page.drawText('Acta de Aprobación', { x: MARGIN + logo.width + 16, y: y - 20, size: 18, font: bold, color: rgb(0.1, 0.1, 0.1) });
-  page.drawText(requisition.number || `#${requisition.id}`, { x: MARGIN + logo.width + 16, y: y - 40, size: 11, font: bold, color: rgb(0.79, 0.35, 0.16) });
-  y -= logo.height + 14;
+  page.drawText('Acta de Aprobación', { x: MARGIN + logo.width + 16, y: y - 22, size: 18, font: bold, color: rgb(0.1, 0.1, 0.1) });
+  page.drawText(requisition.number || `#${requisition.id}`, { x: MARGIN + logo.width + 16, y: y - 42, size: 11, font: bold, color: rgb(0.79, 0.35, 0.16) });
+  y -= Math.max(logo.height, 50);
+  page.drawLine({ start: { x: MARGIN, y }, end: { x: MARGIN + width, y }, thickness: 1.25, color: rgb(0.1, 0.1, 0.1) });
+  y -= 22;
 
-  heading('Datos generales');
   const projectText = requisition.project_name
     ? `${requisition.project_name}${requisition.project_code ? ` (${requisition.project_code})` : ''}`
     : 'Sin proyecto';
-  draw(`Requisición: ${requisition.title}`);
-  draw(`Proyecto: ${projectText}`);
-  if (requisition.budget_cap) draw(`Presupuesto Máximo: ${formatCurrency(requisition.budget_cap)}`);
-  draw(`Versión del documento: v${requisition.version || 1} — ${requisition.original_filename}`);
-  draw(`Radicada por: ${requisition.uploader_name}${requisition.uploader_territory ? ` (${requisition.uploader_territory})` : ''}`);
-  draw(`Fecha de radicación: ${formatDate(requisition.created_at)}`);
-  draw(`Fecha de aprobación final: ${formatDate(finalLog ? finalLog.created_at : requisition.updated_at)}`);
+  const facts = [['Requisición', requisition.title], ['Proyecto', projectText]];
+  if (requisition.budget_cap) facts.push(['Presupuesto Máximo', formatCurrency(requisition.budget_cap)]);
+  facts.push(['Versión del documento', `v${requisition.version || 1} — ${requisition.original_filename}`]);
+  facts.push(['Radicada por', `${requisition.uploader_name}${requisition.uploader_territory ? ` (${requisition.uploader_territory})` : ''}`]);
+  facts.push(['Fecha de radicación', formatDate(requisition.created_at)]);
+  facts.push(['Fecha de aprobación final', formatDate(finalLog ? finalLog.created_at : requisition.updated_at)]);
   if (requisition.selected_provider_name) {
-    draw(`Proveedor seleccionado: ${requisition.selected_provider_name} — ${formatCurrency(requisition.selected_amount)}`);
+    facts.push(['Proveedor seleccionado', `${requisition.selected_provider_name} — ${formatCurrency(requisition.selected_amount)}`]);
   }
-  draw(`Estado: ${STATUS_LABELS[requisition.status] || requisition.status}`);
-  if (requisition.description) draw(`Descripción: ${requisition.description}`);
+  facts.push(['Estado', STATUS_LABELS[requisition.status] || requisition.status]);
+  factsGrid(facts);
+  if (requisition.description) paragraph(requisition.description);
 
   heading('Ruta de aprobación');
-  for (let level = 1; level <= MAX_STEP_LEVEL; level++) {
-    const step = steps.find((s) => s.step_level === level);
-    const log = step ? completionLog(step) : null;
-    const line = log
-      ? `${level}. ${STEP_LABELS[level]} (${roleNameForStep(level)}) — ${log.user_name} · ${formatDate(log.created_at)}`
-      : `${level}. ${STEP_LABELS[level]} (${roleNameForStep(level)}) — pendiente`;
-    draw(line);
-    if (log && log.comments) draw(`   "${log.comments}"`, { size: 9, color: rgb(0.4, 0.4, 0.4) });
-  }
+  table(
+    [
+      { label: '#', width: 20, get: (r) => String(r.level) },
+      { label: 'Paso', width: 110, get: (r) => r.paso },
+      { label: 'Rol', width: 90, get: (r) => r.rol },
+      { label: 'Aprobado por', width: 100, get: (r) => r.por },
+      { label: 'Fecha', width: 100, get: (r) => r.fecha },
+      { label: 'Comentarios', width: width - 420, get: (r) => r.comentarios },
+    ],
+    Array.from({ length: MAX_STEP_LEVEL }, (_, i) => {
+      const level = i + 1;
+      const step = steps.find((s) => s.step_level === level);
+      const log = step ? completionLog(step) : null;
+      return {
+        level,
+        paso: STEP_LABELS[level],
+        rol: roleNameForStep(level),
+        por: log ? log.user_name : '—',
+        fecha: log ? formatDate(log.created_at) : '—',
+        comentarios: (log && log.comments) || '',
+      };
+    }),
+  );
 
   const returns = logs.filter((l) => l.action === 'returned');
   if (returns.length > 0) {
     heading('Devoluciones');
-    for (const log of [...returns].reverse()) {
-      const step = steps.find((s) => s.id === log.approval_step_id);
-      const from = step ? STEP_LABELS[step.step_level] : '—';
-      const to = log.to_level ? `Paso ${log.to_level} — ${STEP_LABELS[log.to_level]}` : '—';
-      draw(`${formatDate(log.created_at)} — ${log.user_name}: de "${from}" a "${to}"`);
-      if (log.comments) draw(`   Motivo: ${log.comments}`, { size: 9, color: rgb(0.4, 0.4, 0.4) });
-    }
+    table(
+      [
+        { label: 'Fecha', width: 100, get: (r) => r.fecha },
+        { label: 'Devuelta desde', width: 120, get: (r) => r.desde },
+        { label: 'Hacia', width: 120, get: (r) => r.hacia },
+        { label: 'Por', width: 90, get: (r) => r.por },
+        { label: 'Motivo', width: width - 430, get: (r) => r.motivo },
+      ],
+      [...returns].reverse().map((log) => {
+        const step = steps.find((s) => s.id === log.approval_step_id);
+        return {
+          fecha: formatDate(log.created_at),
+          desde: step ? STEP_LABELS[step.step_level] : '—',
+          hacia: log.to_level ? `Paso ${log.to_level} — ${STEP_LABELS[log.to_level]}` : '—',
+          por: log.user_name,
+          motivo: log.comments || '',
+        };
+      }),
+    );
   }
 
   if (quotations.length > 0) {
     heading('Cotizaciones evaluadas');
+    const requiredDocs = Object.keys(QUOTATION_DOC_TYPES);
     const sorted = [...quotations].sort((a, b) => Number(a.amount) - Number(b.amount));
-    for (const q of sorted) {
-      const selected = q.status === 'selected' || q.id === requisition.selected_quotation_id;
-      draw(`${q.provider_name} — ${formatCurrency(q.amount)}${selected ? '  [Seleccionada]' : ''}`);
-    }
+    table(
+      [
+        { label: 'Proveedor', width: 160, get: (r) => r.proveedor },
+        { label: 'Monto', width: 90, get: (r) => r.monto },
+        { label: 'Documentación', width: 90, get: (r) => r.docs },
+        { label: 'Notas', width: width - 340, get: (r) => r.notas },
+      ],
+      sorted.map((q) => {
+        const isSelected = q.status === 'selected' || q.id === requisition.selected_quotation_id;
+        const complete = requiredDocs.every((dt) => (q.documents || []).some((d) => d.doc_type === dt));
+        return {
+          proveedor: `${q.provider_name}${isSelected ? ' (Seleccionada)' : ''}`,
+          monto: formatCurrency(q.amount),
+          docs: complete ? 'Completa' : 'Incompleta',
+          notas: q.notes || '',
+        };
+      }),
+    );
   }
 
   const seen = new Set();
@@ -164,15 +262,30 @@ async function buildActaCoverPdf(requisition) {
     const log = step ? completionLog(step) : null;
     if (!log || seen.has(log.user_id)) continue;
     seen.add(log.user_id);
-    signers.push(`${log.user_name} — ${roleName(log.user_role_level)}`);
+    signers.push({ name: log.user_name, role: roleName(log.user_role_level) });
   }
   if (signers.length > 0) {
     heading('Firmas');
-    for (const s of signers) draw(s);
+    const perRow = 3;
+    const colWidth = width / perRow;
+    const rowHeight = 58;
+    for (let i = 0; i < signers.length; i += perRow) {
+      const rowSigners = signers.slice(i, i + perRow);
+      ensureSpace(rowHeight);
+      const lineY = y - 24;
+      rowSigners.forEach((signer, col) => {
+        const x = MARGIN + col * colWidth;
+        page.drawLine({ start: { x, y: lineY }, end: { x: x + colWidth - 20, y: lineY }, thickness: 0.75, color: rgb(0.3, 0.3, 0.3) });
+        page.drawText(truncate(bold, signer.name, 9.5, colWidth - 24), { x, y: lineY - 12, size: 9.5, font: bold, color: TEXT_COLOR });
+        page.drawText(truncate(font, signer.role, 8.5, colWidth - 24), { x, y: lineY - 24, size: 8.5, font, color: MUTED_COLOR });
+      });
+      y -= rowHeight;
+    }
   }
 
   y -= 10;
-  draw(`Documento generado por CID Aprueba el ${formatDate(new Date().toISOString())}.`, { size: 8, color: rgb(0.5, 0.5, 0.5) });
+  ensureSpace(14);
+  page.drawText(`Documento generado por CID Aprueba el ${formatDate(new Date().toISOString())}.`, { x: MARGIN, y, size: 8, font, color: rgb(0.55, 0.55, 0.55) });
 
   return Buffer.from(await doc.save());
 }

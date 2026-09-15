@@ -214,6 +214,8 @@ async function seedApprovedRequisition() {
   await api(compras, 'POST', `/approvals/${req.id}/approve`, { comments: 'Cotizaciones completas (e2e)' });
 
   await approve('rep.legal', 'Cotización única seleccionada (e2e)');
+  const financiera = await apiLogin('area.financiera');
+  await api(financiera, 'POST', `/requisitions/${req.id}/payment-document`, pdfForm({}, 'comprobante-pago.pdf'));
   await approve('area.financiera', 'Aprobación financiera (e2e)');
   const final = await approve('area.compras', 'Aprobación final (e2e)');
 

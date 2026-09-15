@@ -124,6 +124,11 @@ describe('Approval workflow', () => {
     assert.equal(step5.status, 200, step5.body.message);
     assert.equal(step5.body.data.requisition.selected_quotation_id, quotationId);
     assert.equal(step5.body.data.requisition.selected_amount, 1250000);
+
+    // The comprobante de pago is mandatory before Área Financiera can approve
+    const withoutDoc = await approve('financiera', id);
+    assert.equal(withoutDoc.body.error, 'PAYMENT_DOCUMENT_REQUIRED');
+    await as(tokens.financiera).post(`/api/requisitions/${id}/payment-document`).attach('file', PDF, 'pago.pdf');
     assert.equal((await approve('financiera', id)).status, 200); // step 6
 
     const final = await approve('revisor', id);                  // step 7
@@ -163,6 +168,12 @@ describe('Approval workflow', () => {
     );
     assert.equal((await as(tokens.financiera).delete(`/api/requisitions/${id}/payment-document/${docId}`)).status, 200);
 
+    // The comprobante is mandatory: approving without one is rejected
+    const withoutDoc = await approve('financiera', id);
+    assert.equal(withoutDoc.status, 400);
+    assert.equal(withoutDoc.body.error, 'PAYMENT_DOCUMENT_REQUIRED');
+
+    await as(tokens.financiera).post(`/api/requisitions/${id}/payment-document`).attach('file', PDF, 'pago3.pdf');
     await approve('financiera', id); // step 7 now — upload window is closed
     assert.equal(
       (await as(tokens.financiera).post(`/api/requisitions/${id}/payment-document`).attach('file', PDF, 'tarde.pdf')).status,

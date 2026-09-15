@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"draw\\(\\\\`\" src/utils/actaPdf.js)",
+      "Bash(grep -n \"^  const draw\" src/utils/actaPdf.js)"
+    ]
+  }
+}

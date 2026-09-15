@@ -185,8 +185,22 @@ function renderQuotationsPanel(requisition, quotations) {
     `;
   }
 
+  const selected = quotations.find((q) => q.status === 'selected');
+  const others = quotations.filter((q) => q.id !== (selected && selected.id));
+
   if (quotations.length === 0) {
     html += '<div class="empty" style="padding: 24px;">No hay cotizaciones adjuntas aún.</div>';
+  } else if (selected) {
+    // Once a provider is chosen, only show that card — the rest stay one click away.
+    html += renderQuotationCard(requisition, selected, canEdit);
+    if (others.length > 0) {
+      html += `
+        <button class="btn btn--outline btn--sm" id="btn-toggle-other-quotations" data-action="toggle-other-quotations" data-show-label="Ver otras cotizaciones (${others.length})" data-hide-label="Ocultar otras cotizaciones">Ver otras cotizaciones (${others.length})</button>
+        <div class="hidden" id="other-quotations">
+          ${others.map((quotation) => renderQuotationCard(requisition, quotation, canEdit)).join('')}
+        </div>
+      `;
+    }
   } else {
     for (const quotation of quotations) {
       html += renderQuotationCard(requisition, quotation, canEdit);
@@ -301,9 +315,15 @@ function renderPaymentPanel(requisition, quotations) {
   }
 
   return `
-    <div class="payment-document" id="payment-document" style="margin-bottom: 16px;">
+    <div class="payment-document" id="payment-document" data-doc-missing="${doc ? 'false' : 'true'}" style="margin-bottom: 16px;">
       <label class="form__label">${label} — ${escapeHtml(selected.provider_name)} (${formatCurrency(selected.amount)})</label>
       ${inner}
+      ${!doc ? `
+        <div class="quotation-warning">
+          <span>⚠️</span>
+          <span>Debe adjuntar el comprobante de pago antes de poder aprobar.</span>
+        </div>
+      ` : ''}
     </div>
   `;
 }
@@ -754,6 +774,11 @@ async function handleApprovalSubmit(requisitionId) {
     }
     selectedQuotationId = selectedRadio.value;
   }
+  const paymentDoc = $('#payment-document');
+  if (key === 'approve' && paymentDoc && paymentDoc.dataset.docMissing === 'true') {
+    setFeedback(feedback, 'error', 'Debe adjuntar el comprobante de pago antes de aprobar.');
+    return;
+  }
 
   if (option.confirm && !(await confirmDialog(option.confirm))) return;
 
@@ -961,6 +986,12 @@ export const actions = {
       t.dataset.filename,
     ),
   'toggle-quotation-form': () => toggleQuotationForm(),
+  'toggle-other-quotations': (t) => {
+    const panel = $('#other-quotations');
+    if (!panel) return;
+    const hidden = panel.classList.toggle('hidden');
+    t.textContent = hidden ? t.dataset.showLabel : t.dataset.hideLabel;
+  },
   'cancel-quotation-form': () => cancelQuotationForm(),
   'submit-quotation': (t) => submitQuotation(t.dataset.reqId, Number(t.dataset.budgetCap) || null),
   'delete-quotation': (t) => deleteQuotation(t.dataset.reqId, t.dataset.quotationId),

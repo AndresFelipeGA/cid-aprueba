@@ -7,7 +7,7 @@ const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 const { toCsv, sendCsv } = require('../utils/csv');
 const {
-  STEP_TO_ROLE_MAP, MAX_STEP_LEVEL, FIRST_APPROVAL_LEVEL, STEP_LABELS, LOG_ACTIONS, ROLE_NAMES,
+  STEP_TO_ROLE_MAP, MAX_STEP_LEVEL, FIRST_APPROVAL_LEVEL, STEP_LABELS, LOG_ACTIONS, ROLE_NAMES, PAYMENT_STEP,
 } = require('../config/workflow');
 const { loadVisibleRequisition } = require('./requisitionController');
 
@@ -64,6 +64,9 @@ const approvalController = {
 
     if (level === QUOTATION_STEP && !Quotation.hasCompleteQuotation(requisitionId)) {
       throw new AppError('Debe adjuntar al menos una cotización completa con todos los documentos del proveedor (RUT, Cámara de Comercio, Cédula y Certificado Bancario) antes de aprobar', 400, 'INCOMPLETE_QUOTATION');
+    }
+    if (level === PAYMENT_STEP && !Quotation.hasPaymentDocument(requisitionId)) {
+      throw new AppError('Debe adjuntar el comprobante de pago antes de aprobar', 400, 'PAYMENT_DOCUMENT_REQUIRED');
     }
 
     let selectedQuotationId = null;
