@@ -296,10 +296,14 @@ export default function Users() {
   const handleToggleActive = async (u) => {
     const action = u.is_active ? 'desactivar' : 'activar';
     if (!(await confirm(`¿Está seguro de ${action} al usuario "${u.username}"?`))) return;
+
+    // Optimistic update: flip the row immediately, roll back only if the request fails —
+    // no full-table reload, no wait for the round-trip.
+    setUsers((list) => list.map((row) => (row.id === u.id ? { ...row, is_active: u.is_active ? 0 : 1 } : row)));
     try {
       await API.toggleUserActive(u.id);
-      load();
     } catch (err) {
+      setUsers((list) => list.map((row) => (row.id === u.id ? { ...row, is_active: u.is_active } : row)));
       showToast(err.message || `Error al ${action} el usuario`, 'error');
     }
   };

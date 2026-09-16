@@ -1366,6 +1366,65 @@ textarea.form__input {
   to { transform: rotate(360deg); }
 }
 
+/* --- Route transition --- */
+.route-fade {
+  animation: route-fade-in 0.22s var(--ease);
+}
+
+@keyframes route-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-fade {
+    animation: none;
+  }
+}
+
+/* --- Skeleton (loading placeholder shaped like the real content) --- */
+.skeleton {
+  border-radius: var(--radius);
+  background: linear-gradient(
+    100deg,
+    rgba(0, 0, 0, 0.06) 30%,
+    rgba(0, 0, 0, 0.1) 45%,
+    rgba(0, 0, 0, 0.06) 60%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0.06) 30%,
+    rgba(255, 255, 255, 0.12) 45%,
+    rgba(255, 255, 255, 0.06) 60%
+  );
+  background-size: 200% 100%;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-stat-card__label {
+  width: 60%;
+  height: 11px;
+  margin-bottom: 10px;
+}
+
+.skeleton-stat-card__value {
+  width: 40%;
+  height: 26px;
+}
+
+.skeleton-row {
+  height: 14px;
+  margin: 6px 0;
+}
+
 /* --- Empty State --- */
 .empty {
   text-align: center;

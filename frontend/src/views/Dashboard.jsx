@@ -2,7 +2,7 @@
    CID Aprueba — Dashboard view
    ============================================ */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Loading from '../components/Loading.jsx';
+import DashboardSkeleton from '../components/DashboardSkeleton.jsx';
 import * as API from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useMeta } from '../context/MetaContext.jsx';
@@ -301,7 +301,7 @@ export default function Dashboard() {
   const recentActivity = (data && data.recent_activity) || [];
   const groups = useMemo(() => groupActivityByRequisition(recentActivity), [recentActivity]);
 
-  if (!data) return <Loading />;
+  if (!data) return <DashboardSkeleton />;
 
   const stats = data.summary || {};
   const byStatus = data.by_status || {};

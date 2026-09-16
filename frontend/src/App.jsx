@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ToastProvider } from './context/ToastContext.jsx';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { MetaProvider } from './context/MetaContext.jsx';
@@ -25,6 +25,7 @@ import Users from './views/Users.jsx';
 function AppShell() {
   const { logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
 
   // Explicit logout drops the deep link so the next login lands on the dashboard
   // (session expiry, elsewhere, leaves the hash alone so re-login returns to the same page).
@@ -38,16 +39,18 @@ function AppShell() {
       <Sidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
       <Header onLogout={handleLogout} onToggleMobile={() => setMobileOpen((o) => !o)} />
       <main className="main" id="main-content" role="main">
-        <Routes>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/requisitions" element={<Requisitions />} />
-          <Route path="/requisitions/:id" element={<RequisitionDetail />} />
-          <Route path="/requisitions/:id/acta" element={<Acta />} />
-          <Route path="/create" element={<CreateRequisition />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+        <div className="route-fade" key={location.pathname}>
+          <Routes>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/requisitions" element={<Requisitions />} />
+            <Route path="/requisitions/:id" element={<RequisitionDetail />} />
+            <Route path="/requisitions/:id/acta" element={<Acta />} />
+            <Route path="/create" element={<CreateRequisition />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/users" element={<Users />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </div>
       </main>
       <EmailModal />
     </div>
