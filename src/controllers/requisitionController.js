@@ -200,7 +200,7 @@ const requisitionController = {
     const coverPdf = await buildActaCoverPdf(full);
     res.set('Content-Type', 'application/zip');
     res.set('Content-Disposition', `attachment; filename="expediente-${full.number || full.id}.zip"`);
-    const archive = buildActaZipStream(full, coverPdf);
+    const archive = await buildActaZipStream(full, coverPdf);
     archive.pipe(res);
   },
 

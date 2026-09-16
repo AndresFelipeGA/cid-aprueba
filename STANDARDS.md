@@ -551,19 +551,27 @@ describe('POST /api/approvals/:requisitionId/approve', () => {
 
 ## 11. Frontend Standards
 
-### JavaScript
+### Stack
 
-- No frameworks or build tools — vanilla ES6+ modules loaded via `<script>` tags
-- Use `fetch()` for all API calls through a centralized [`api.js`](public/js/api.js) wrapper
-- Handle loading states: show spinners during API calls, disable buttons to prevent double-clicks
-- Display user-friendly error messages from API responses
+- **React 18** with functional components and hooks only — no class components
+- **Vite** builds `frontend/` into `public/`; no separate frontend server in production (`node server.js` serves the built output)
+- **react-router-dom** (`HashRouter`) for routing — keeps the pre-existing `#/view` URL scheme
+- State lives in React Context (`frontend/src/context/`), not a global mutable object; components read it via hooks (`useAuth()`, `useMeta()`, etc.)
+
+### JavaScript / JSX
+
+- Use `fetch()` for all API calls through the centralized [`api.js`](frontend/src/api.js) wrapper
+- Handle loading states: render a `<Loading />` placeholder during API calls, `disabled` on buttons to prevent double-clicks
+- Display user-friendly error messages from API responses (`err.message`)
+- Prefer composing small components over one large view file; a view file may still hold its private sub-components when they aren't reused elsewhere
+- Don't reach for `document.getElementById` / manual DOM mutation inside components — use refs only for things React can't express (native `<dialog>`, focus management, drag-and-drop drop zones)
 
 ### CSS
 
-- Single stylesheet: [`styles.css`](public/css/styles.css)
+- Single stylesheet: [`frontend/public/css/styles.css`](frontend/public/css/styles.css) — a static passthrough asset, not bundled by Vite, linked directly from `frontend/index.html`
 - CSS custom properties for theming at the `:root` level
 - Responsive layout using CSS Grid and Flexbox
-- No CSS frameworks — keep the design minimal and custom
+- No CSS frameworks and no CSS-in-JS — keep the design minimal, custom, and in one place
 
 ### Accessibility
 
@@ -573,8 +581,9 @@ describe('POST /api/approvals/:requisitionId/approve', () => {
 - Use `aria-` attributes where semantic HTML is insufficient
 - Maintain sufficient color contrast ratios (WCAG AA minimum)
 
-### HTML
+### Build & Local Development
 
-- One HTML file per page (no SPA routing)
-- Navigation between pages via standard links
-- Progressive enhancement: core functionality works without JavaScript where possible
+```bash
+npm run dev:client   # Vite dev server with hot reload (proxies /api/* to :3000)
+npm run build         # Production build into public/ — required before `npm start`
+```

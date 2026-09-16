@@ -13,7 +13,6 @@
 const fs = require('fs');
 const path = require('path');
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
-const { ZipArchive } = require('archiver');
 const {
   STEP_LABELS, ROLE_NAMES, STATUS_LABELS, MAX_STEP_LEVEL, QUOTATION_DOC_TYPES, PAYMENT_DOC_TYPE, PAYMENT_DOC_LABEL, STEP_TO_ROLE_MAP,
 } = require('../config/workflow');
@@ -360,7 +359,9 @@ async function buildConsolidatedActaPdf(requisition) {
 }
 
 /** Same documents as the consolidated PDF, but kept as separate files inside a ZIP. */
-function buildActaZipStream(requisition, coverPdfBuffer) {
+async function buildActaZipStream(requisition, coverPdfBuffer) {
+  // archiver v8 ships ESM-only; this file is CommonJS, so it must be loaded lazily.
+  const { ZipArchive } = await import('archiver');
   const archive = new ZipArchive({ zlib: { level: 9 } });
   const number = requisition.number || `req-${requisition.id}`;
   const safe = (name) => String(name).replace(/[/\\?%*:|"<>]/g, '-');

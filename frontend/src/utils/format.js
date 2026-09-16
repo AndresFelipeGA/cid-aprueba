@@ -2,14 +2,6 @@
    CID Aprueba — Formatting helpers
    ============================================ */
 
-const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-
-/** Escape text for safe use in HTML content AND quoted attributes. */
-export function escapeHtml(str) {
-  if (str === null || str === undefined || str === '') return '';
-  return String(str).replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
-}
-
 const DATE_LONG = new Intl.DateTimeFormat('es-CO', {
   year: 'numeric',
   month: 'short',
