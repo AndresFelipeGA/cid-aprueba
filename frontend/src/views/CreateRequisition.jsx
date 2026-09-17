@@ -189,13 +189,14 @@ export default function CreateRequisition() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const trimmedTitle = title.trim();
-    const budget = Number(budgetCap);
+    // An empty field means "no hay presupuesto definido", same as explicitly typing 0.
+    const budget = budgetCap.trim() === '' ? 0 : Number(budgetCap);
     if (!trimmedTitle) {
       setFeedback({ type: 'error', message: 'El título es obligatorio' });
       return;
     }
-    if (budgetCap.trim() === '' || Number.isNaN(budget) || budget <= 0) {
-      setFeedback({ type: 'error', message: 'El presupuesto máximo es obligatorio y debe ser mayor a cero' });
+    if (Number.isNaN(budget) || budget < 0) {
+      setFeedback({ type: 'error', message: 'El presupuesto máximo no puede ser un número negativo' });
       return;
     }
     if (!file) {
@@ -246,8 +247,25 @@ export default function CreateRequisition() {
             </div>
             <div className="form__group">
               <label className="form__label" htmlFor="upload-budget-cap">Presupuesto Máximo (COP)</label>
-              <input className="form__input" type="number" id="upload-budget-cap" required min="1" step="1" inputMode="numeric" placeholder="Ej: 5000000" value={budgetCap} onChange={(e) => setBudgetCap(e.target.value)} />
-              <p className="form__hint">Las cotizaciones de proveedores no podrán superar este valor.</p>
+              <input
+                className="form__input"
+                type="number"
+                id="upload-budget-cap"
+                min="0"
+                step="1"
+                inputMode="numeric"
+                placeholder="Ej: 5000000"
+                value={budgetCap}
+                onChange={(e) => setBudgetCap(e.target.value)}
+              />
+              {budgetCap.trim() === '' || Number(budgetCap) === 0 ? (
+                <p className="form__hint form__hint--info">
+                  <span className="form__hint-icon" aria-hidden="true">✓</span>
+                  Sin presupuesto máximo definido — deja el campo en <strong>0</strong> (o vacío) si esta requisición todavía no tiene un límite de presupuesto.
+                </p>
+              ) : (
+                <p className="form__hint">Las cotizaciones de proveedores no podrán superar este valor.</p>
+              )}
             </div>
             <div className="form__group">
               <label className="form__label" htmlFor="upload-project">Proyecto</label>

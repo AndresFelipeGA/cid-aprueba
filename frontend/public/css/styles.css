@@ -427,6 +427,24 @@ img {
   font-size: 0.8125rem;
   color: var(--color-text-light);
   margin-top: 6px;
+  animation: hint-fade-in 0.18s var(--ease);
+}
+
+/* A hint that confirms a deliberate, valid choice (not a warning) — e.g. "sin presupuesto definido" */
+.form__hint--info {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--color-secondary);
+  font-weight: 500;
+}
+
+.form__hint-icon {
+  flex-shrink: 0;
+}
+
+@keyframes hint-fade-in {
+  from { opacity: 0; }
 }
 
 .form__input {
