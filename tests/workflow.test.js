@@ -28,6 +28,7 @@ async function addCompleteQuotation(reqId, provider, amount) {
     .post(`/api/requisitions/${reqId}/quotations`)
     .field('provider_name', provider)
     .field('amount', String(amount))
+    .field('advance_percent', '50')
     .attach('file', PDF, 'cotizacion.pdf');
   assert.equal(quotation.status, 201, quotation.body.message);
   const quotationId = quotation.body.data.quotation.id;
@@ -94,12 +95,12 @@ describe('Approval workflow', () => {
     await approve('legal', req.id); // step 4
 
     const tooHigh = await as(tokens.compras).post(`/api/requisitions/${req.id}/quotations`)
-      .field('provider_name', 'Muy caro').field('amount', '1500000').attach('file', PDF, 'c.pdf');
+      .field('provider_name', 'Muy caro').field('amount', '1500000').field('advance_percent', '100').attach('file', PDF, 'c.pdf');
     assert.equal(tooHigh.status, 400);
     assert.equal(tooHigh.body.error, 'AMOUNT_EXCEEDS_BUDGET_CAP');
 
     const ok = await as(tokens.compras).post(`/api/requisitions/${req.id}/quotations`)
-      .field('provider_name', 'Dentro del tope').field('amount', '1000000').attach('file', PDF, 'c.pdf');
+      .field('provider_name', 'Dentro del tope').field('amount', '1000000').field('advance_percent', '100').attach('file', PDF, 'c.pdf');
     assert.equal(ok.status, 201, ok.body.message);
   });
 

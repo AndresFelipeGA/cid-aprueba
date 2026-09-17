@@ -62,7 +62,7 @@ const Quotation = {
     };
   },
 
-  create({ requisitionId, providerName, amount, currency = CURRENCY, notes, filePath, originalFilename, createdBy }) {
+  create({ requisitionId, providerName, amount, currency = CURRENCY, notes, advancePercent, filePath, originalFilename, createdBy }) {
     // Check max 3 quotations per requisition
     const count = Quotation.countByRequisition(requisitionId);
     if (count >= MAX_QUOTATIONS) {
@@ -70,9 +70,9 @@ const Quotation = {
     }
 
     const result = db.prepare(`
-      INSERT INTO quotations (requisition_id, provider_name, amount, currency, notes, file_path, original_filename, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(requisitionId, providerName, amount, currency, notes || null, filePath, originalFilename, createdBy);
+      INSERT INTO quotations (requisition_id, provider_name, amount, currency, notes, advance_percent, file_path, original_filename, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(requisitionId, providerName, amount, currency, notes || null, advancePercent ?? null, filePath, originalFilename, createdBy);
 
     return Quotation.findById(result.lastInsertRowid);
   },

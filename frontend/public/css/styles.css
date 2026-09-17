@@ -1811,6 +1811,21 @@ textarea.form__input {
   margin-bottom: 14px;
 }
 
+.quotation-form__payment-terms {
+  display: flex;
+  gap: 12px;
+}
+
+.quotation-form__payment-terms-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.quotation-form__payment-terms-col .form__input:disabled {
+  color: var(--color-text-light);
+  cursor: not-allowed;
+}
+
 .quotation-form__actions {
   display: flex;
   gap: 10px;
@@ -3837,6 +3852,17 @@ body,
   font-size: 0.8125rem;
   color: var(--color-text-light);
   margin-bottom: 12px;
+}
+
+.quotation-card__payment-terms {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-accent-text);
+  background: rgba(107, 142, 35, 0.1);
+  border-radius: 100px;
+  padding: 2px 10px;
+  margin-bottom: 10px;
 }
 
 .quotation-card--selected {

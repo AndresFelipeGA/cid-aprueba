@@ -205,6 +205,7 @@ async function seedApprovedRequisition() {
   const quotation = await api(compras, 'POST', `/requisitions/${req.id}/quotations`, pdfForm({
     provider_name: 'Proveedor E2E S.A.S.',
     amount: 1250000,
+    advance_percent: 30,
     notes: 'Entrega en 15 días',
   }, 'cotizacion.pdf'));
   const qId = quotation.data.quotation.id;

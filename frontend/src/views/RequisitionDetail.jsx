@@ -70,12 +70,23 @@ export function compareQuotations(quotations) {
 
 // --- Quotation card ---
 
+/** "Anticipo 30% · Contra entrega 70%", collapsing to a single phrase at the 0/100 extremes. */
+function paymentTermsLabel(advancePercent) {
+  if (advancePercent === null || advancePercent === undefined) return null;
+  const advance = Number(advancePercent);
+  const remainder = 100 - advance;
+  if (advance === 100) return '100% anticipado';
+  if (advance === 0) return '100% contra entrega';
+  return `Anticipo ${advance}% · Contra entrega ${remainder}%`;
+}
+
 function QuotationCard({ requisition, quotation, canEdit, onPreview, onDelete, onAttachDoc, onDeleteDoc }) {
   const { docTypes, paymentStep, paymentDocType, paymentDocLabel } = useMeta();
   const docs = quotation.documents || [];
   const isSelected = quotation.status === 'selected';
   const isAtPaymentStep = requisition.current_approval_level === paymentStep() && isOpen(requisition);
   const paymentDoc = docs.find((d) => d.doc_type === paymentDocType());
+  const paymentTerms = paymentTermsLabel(quotation.advance_percent);
 
   return (
     <div className={`quotation-card${isSelected ? ' quotation-card--selected' : ''}`}>
@@ -86,6 +97,7 @@ function QuotationCard({ requisition, quotation, canEdit, onPreview, onDelete, o
           {isSelected && <span className="tag tag--success">Seleccionada</span>}
         </span>
       </div>
+      {paymentTerms && <div className="quotation-card__payment-terms">{paymentTerms}</div>}
       {quotation.notes && <div className="quotation-card__notes">{quotation.notes}</div>}
       <div className="quotation-card__file">
         <span className="quotation-card__filename" role="button" tabIndex={0} title="Clic para vista previa" onClick={() => onPreview(quotation.original_filename)}>
@@ -159,11 +171,14 @@ function QuotationCard({ requisition, quotation, canEdit, onPreview, onDelete, o
 function QuotationForm({ requisitionId, budgetCap, onSubmitted, onCancel }) {
   const [provider, setProvider] = useState('');
   const [amount, setAmount] = useState('');
+  const [advancePercent, setAdvancePercent] = useState('');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef(null);
+
+  const remainderPercent = advancePercent.trim() === '' ? '' : String(Math.max(0, 100 - Number(advancePercent)));
 
   const handleSubmit = async () => {
     const providerName = provider.trim();
@@ -180,6 +195,11 @@ function QuotationForm({ requisitionId, budgetCap, onSubmitted, onCancel }) {
       setFeedback({ type: 'error', message: `El monto no puede superar el presupuesto máximo de ${formatCurrency(budgetCap)}` });
       return;
     }
+    const advanceNum = Number(advancePercent);
+    if (advancePercent.trim() === '' || Number.isNaN(advanceNum) || advanceNum < 0 || advanceNum > 100) {
+      setFeedback({ type: 'error', message: 'El anticipo es obligatorio y debe ser un porcentaje entre 0 y 100' });
+      return;
+    }
     if (!file) {
       setFeedback({ type: 'error', message: 'Debe seleccionar un archivo de cotización' });
       return;
@@ -187,6 +207,7 @@ function QuotationForm({ requisitionId, budgetCap, onSubmitted, onCancel }) {
     const formData = new FormData();
     formData.append('provider_name', providerName);
     formData.append('amount', String(amountNum));
+    formData.append('advance_percent', String(advanceNum));
     if (notes.trim()) formData.append('notes', notes.trim());
     formData.append('file', file);
 
@@ -211,6 +232,28 @@ function QuotationForm({ requisitionId, budgetCap, onSubmitted, onCancel }) {
         <label className="form__label" htmlFor="quotation-amount">Monto (COP)</label>
         <input className="form__input" type="number" id="quotation-amount" required min="1" max={budgetCap || undefined} step="1" inputMode="numeric" placeholder="Ej: 1250000" value={amount} onChange={(e) => setAmount(e.target.value)} />
         {budgetCap ? <p className="form__hint">No puede superar el presupuesto máximo de {formatCurrency(budgetCap)}.</p> : null}
+      </div>
+      <div className="quotation-form__field quotation-form__payment-terms">
+        <div className="quotation-form__payment-terms-col">
+          <label className="form__label" htmlFor="quotation-advance">Anticipo (%)</label>
+          <input
+            className="form__input"
+            type="number"
+            id="quotation-advance"
+            required
+            min="0"
+            max="100"
+            step="1"
+            inputMode="numeric"
+            placeholder="Ej: 30"
+            value={advancePercent}
+            onChange={(e) => setAdvancePercent(e.target.value)}
+          />
+        </div>
+        <div className="quotation-form__payment-terms-col">
+          <label className="form__label" htmlFor="quotation-remainder">Contra entrega (%)</label>
+          <input className="form__input" type="text" id="quotation-remainder" disabled value={remainderPercent ? `${remainderPercent}%` : '—'} />
+        </div>
       </div>
       <div className="quotation-form__field">
         <label className="form__label" htmlFor="quotation-notes">Notas (opcional)</label>

@@ -64,6 +64,7 @@ const quotationController = {
       providerName,
       amount,
       notes: req.body.notes,
+      advancePercent: req.body.advance_percent,
       filePath: storeQuotationFile(req.file, requisitionId, 'cotizacion'),
       originalFilename: req.file.originalname,
       createdBy: req.user.id,
