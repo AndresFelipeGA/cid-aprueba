@@ -28,8 +28,10 @@ describe('Validation, authorization wiring and upload hygiene', () => {
     const res = await as('').get('/api/meta');
     assert.equal(res.status, 200);
     assert.equal(res.body.data.step_to_role['5'], 3);
-    assert.equal(res.body.data.max_step, 7);
+    assert.equal(res.body.data.step_to_role['6'], 4);
+    assert.equal(res.body.data.max_step, 8);
     assert.ok(res.body.data.doc_types.rut);
+    assert.ok(res.body.data.final_purchase_doc_types.certificado_bancario);
   });
 
   it('enforces roles through authorize(): users API, requisition upload, project creation', async () => {

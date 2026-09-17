@@ -252,6 +252,15 @@ export function deletePaymentDocument(requisitionId, documentId) {
   return request('DELETE', `/requisitions/${requisitionId}/payment-document/${documentId}`);
 }
 
+/** Encargado/a de Compras' second approval — optional closing documents on the selected quotation. */
+export function uploadFinalPurchaseDocument(requisitionId, formData) {
+  return request('POST', `/requisitions/${requisitionId}/final-purchase-documents`, formData, true);
+}
+
+export function deleteFinalPurchaseDocument(requisitionId, documentId) {
+  return request('DELETE', `/requisitions/${requisitionId}/final-purchase-documents/${documentId}`);
+}
+
 /** Comparative table across all quotations — one per requisition, not tied to a single provider. */
 export function uploadComparisonDocument(requisitionId, formData) {
   return request('POST', `/requisitions/${requisitionId}/comparison-document`, formData, true);

@@ -14,7 +14,8 @@ const fs = require('fs');
 const path = require('path');
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const {
-  STEP_LABELS, ROLE_NAMES, STATUS_LABELS, MAX_STEP_LEVEL, QUOTATION_DOC_TYPES, PAYMENT_DOC_TYPE, PAYMENT_DOC_LABEL, STEP_TO_ROLE_MAP,
+  STEP_LABELS, ROLE_NAMES, STATUS_LABELS, MAX_STEP_LEVEL, QUOTATION_DOC_TYPES, OPTIONAL_QUOTATION_DOC_TYPES,
+  FINAL_PURCHASE_DOC_TYPES, PAYMENT_DOC_TYPE, PAYMENT_DOC_LABEL, STEP_TO_ROLE_MAP,
 } = require('../config/workflow');
 
 const PAGE_SIZE = [595.28, 841.89]; // A4 in points
@@ -331,11 +332,11 @@ async function appendFile(doc, font, bold, sectionTitle, filePath, originalFilen
   }
 }
 
-/** Selected quotation's four required provider documents, in a stable order. */
+/** Selected quotation's required + optional provider documents that were actually attached, in a stable order. */
 function selectedProviderDocs(requisition) {
   const selected = (requisition.quotations || []).find((q) => q.id === requisition.selected_quotation_id);
   if (!selected) return { provider: null, docs: [] };
-  const docs = Object.entries(QUOTATION_DOC_TYPES)
+  const docs = Object.entries({ ...QUOTATION_DOC_TYPES, ...OPTIONAL_QUOTATION_DOC_TYPES, ...FINAL_PURCHASE_DOC_TYPES })
     .map(([key, label]) => ({ label, doc: (selected.documents || []).find((d) => d.doc_type === key) }))
     .filter((d) => d.doc);
   const payment = (selected.documents || []).find((d) => d.doc_type === PAYMENT_DOC_TYPE);

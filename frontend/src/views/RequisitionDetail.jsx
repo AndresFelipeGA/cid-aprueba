@@ -80,8 +80,46 @@ function paymentTermsLabel(advancePercent) {
   return `Anticipo ${advance}% · Contra entrega ${remainder}%`;
 }
 
+/** One row in the provider documents list — shared by the required and optional sections. */
+function DocRow({ docType, doc, canEdit, optional, onPreview, onAttachDoc, onDeleteDoc }) {
+  if (doc) {
+    return (
+      <div className="quotation-card__doc-item">
+        <span
+          className="quotation-card__doc-status quotation-card__doc-status--complete quotation-card__doc-filename"
+          role="button"
+          tabIndex={0}
+          title="Clic para vista previa"
+          onClick={() => onPreview(doc.original_filename, doc.id)}
+        >
+          ✅ {docType.label}: {doc.original_filename}
+        </span>
+        <div className="quotation-card__actions">
+          <button className="btn btn--outline btn--sm" onClick={() => onPreview(doc.original_filename, doc.id)}>Ver</button>
+          {canEdit && <button className="btn btn--danger btn--sm" onClick={() => onDeleteDoc(doc.id)}>Eliminar</button>}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="quotation-card__doc-item">
+      <span className={`quotation-card__doc-status${optional ? ' quotation-card__doc-status--optional' : ' quotation-card__doc-status--missing'}`}>
+        {optional ? '—' : '❌'} {docType.label}: (sin adjuntar)
+      </span>
+      <div className="quotation-card__actions">
+        {canEdit && (
+          <label className="btn btn--outline btn--sm quotation-card__attach-btn">
+            Adjuntar
+            <input type="file" className="hidden" onChange={(e) => onAttachDoc(docType.key, e.target)} />
+          </label>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function QuotationCard({ requisition, quotation, canEdit, onPreview, onDelete, onAttachDoc, onDeleteDoc }) {
-  const { docTypes, paymentStep, paymentDocType, paymentDocLabel } = useMeta();
+  const { docTypes, optionalDocTypes, paymentStep, paymentDocType, paymentDocLabel } = useMeta();
   const docs = quotation.documents || [];
   const isSelected = quotation.status === 'selected';
   const isAtPaymentStep = requisition.current_approval_level === paymentStep() && isOpen(requisition);
@@ -113,41 +151,17 @@ function QuotationCard({ requisition, quotation, canEdit, onPreview, onDelete, o
       </div>
       <div className="quotation-card__documents">
         <div className="quotation-card__documents-title">Documentos del proveedor:</div>
-        {docTypes().map((docType) => {
-          const doc = docs.find((d) => d.doc_type === docType.key);
-          if (doc) {
-            return (
-              <div className="quotation-card__doc-item" key={docType.key}>
-                <span
-                  className="quotation-card__doc-status quotation-card__doc-status--complete quotation-card__doc-filename"
-                  role="button"
-                  tabIndex={0}
-                  title="Clic para vista previa"
-                  onClick={() => onPreview(doc.original_filename, doc.id, quotation.id)}
-                >
-                  ✅ {docType.label}: {doc.original_filename}
-                </span>
-                <div className="quotation-card__actions">
-                  <button className="btn btn--outline btn--sm" onClick={() => onPreview(doc.original_filename, doc.id, quotation.id)}>Ver</button>
-                  {canEdit && <button className="btn btn--danger btn--sm" onClick={() => onDeleteDoc(quotation.id, doc.id)}>Eliminar</button>}
-                </div>
-              </div>
-            );
-          }
-          return (
-            <div className="quotation-card__doc-item" key={docType.key}>
-              <span className="quotation-card__doc-status quotation-card__doc-status--missing">❌ {docType.label}: (sin adjuntar)</span>
-              <div className="quotation-card__actions">
-                {canEdit && (
-                  <label className="btn btn--outline btn--sm quotation-card__attach-btn">
-                    Adjuntar
-                    <input type="file" className="hidden" onChange={(e) => onAttachDoc(quotation.id, docType.key, e.target)} />
-                  </label>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        {docTypes().map((docType) => (
+          <DocRow
+            key={docType.key}
+            docType={docType}
+            doc={docs.find((d) => d.doc_type === docType.key)}
+            canEdit={canEdit}
+            onPreview={(filename, docId) => onPreview(filename, docId, quotation.id)}
+            onAttachDoc={(docType_, target) => onAttachDoc(quotation.id, docType_, target)}
+            onDeleteDoc={(docId) => onDeleteDoc(quotation.id, docId)}
+          />
+        ))}
         {paymentDoc && !isAtPaymentStep && (
           <div className="quotation-card__doc-item">
             <span
@@ -164,6 +178,21 @@ function QuotationCard({ requisition, quotation, canEdit, onPreview, onDelete, o
             </div>
           </div>
         )}
+      </div>
+      <div className="quotation-card__documents quotation-card__documents--optional">
+        <div className="quotation-card__documents-title">Documentos opcionales (según aplique):</div>
+        {optionalDocTypes().map((docType) => (
+          <DocRow
+            key={docType.key}
+            docType={docType}
+            doc={docs.find((d) => d.doc_type === docType.key)}
+            canEdit={canEdit}
+            optional
+            onPreview={(filename, docId) => onPreview(filename, docId, quotation.id)}
+            onAttachDoc={(docType_, target) => onAttachDoc(quotation.id, docType_, target)}
+            onDeleteDoc={(docId) => onDeleteDoc(quotation.id, docId)}
+          />
+        ))}
       </div>
     </div>
   );
@@ -637,11 +666,64 @@ function PaymentPanel({ requisition, quotations, onPreview, onReload }) {
   );
 }
 
+/** Encargado/a de Compras' second approval: optional closing documents on the already-selected quotation. */
+function FinalPurchasePanel({ requisition, quotations, onPreview, onReload }) {
+  const { finalPurchaseDocTypes } = useMeta();
+  const { showToast } = useToast();
+  const selected = quotations.find((q) => q.id === requisition.selected_quotation_id);
+  if (!selected) {
+    return <div className="alert alert--error">No hay una cotización seleccionada para esta requisición.</div>;
+  }
+  const docs = selected.documents || [];
+
+  const handleAttach = async (docType, inputEl) => {
+    if (!inputEl.files || inputEl.files.length === 0) return;
+    const formData = new FormData();
+    formData.append('doc_type', docType);
+    formData.append('file', inputEl.files[0]);
+    try {
+      await API.uploadFinalPurchaseDocument(requisition.id, formData);
+      onReload();
+    } catch (err) {
+      showToast(err.message || 'Error al adjuntar el documento', 'error');
+    }
+  };
+
+  const handleDeleteDoc = async (docId) => {
+    try {
+      await API.deleteFinalPurchaseDocument(requisition.id, docId);
+      onReload();
+    } catch (err) {
+      showToast(err.message || 'Error al eliminar el documento', 'error');
+    }
+  };
+
+  return (
+    <div className="quotation-card__documents" id="final-purchase-documents" style={{ marginBottom: 16 }}>
+      <div className="quotation-card__documents-title">
+        Documentos de Cierre de Compra — {selected.provider_name} ({formatCurrency(selected.amount)})
+      </div>
+      {finalPurchaseDocTypes().map((docType) => (
+        <DocRow
+          key={docType.key}
+          docType={docType}
+          doc={docs.find((d) => d.doc_type === docType.key)}
+          canEdit
+          optional
+          onPreview={(filename, docId) => onPreview(() => API.downloadQuotationDocument(requisition.id, selected.id, docId), filename)}
+          onAttachDoc={handleAttach}
+          onDeleteDoc={handleDeleteDoc}
+        />
+      ))}
+    </div>
+  );
+}
+
 // --- Approval panel ---
 
 function ApprovalPanel({ requisition, quotations, onPreview, onReload }) {
   const { user } = useAuth();
-  const { stepLabel, roleNameForStep, firstApprovalLevel, paymentStep, paymentDocType } = useMeta();
+  const { stepLabel, roleNameForStep, firstApprovalLevel, paymentStep, paymentDocType, finalPurchaseStep } = useMeta();
   const { showToast } = useToast();
   const confirm = useConfirm();
   const level = requisition.current_approval_level;
@@ -739,6 +821,9 @@ function ApprovalPanel({ requisition, quotations, onPreview, onReload }) {
       )}
       {isSelectionStep && quotations.length === 0 && (
         <div className="alert alert--error">No hay cotizaciones disponibles para seleccionar. El paso anterior debe agregar cotizaciones.</div>
+      )}
+      {!isSelectionStep && level === finalPurchaseStep() && (
+        <FinalPurchasePanel requisition={requisition} quotations={quotations} onPreview={onPreview} onReload={onReload} />
       )}
       {!isSelectionStep && level === paymentStep() && (
         <PaymentPanel requisition={requisition} quotations={quotations} onPreview={onPreview} onReload={onReload} />

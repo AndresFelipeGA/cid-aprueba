@@ -64,7 +64,7 @@ const approvalController = {
 
     if (level === QUOTATION_STEP) {
       if (!Quotation.hasCompleteQuotation(requisitionId)) {
-        throw new AppError('Debe adjuntar al menos una cotización completa con todos los documentos del proveedor (RUT, Cámara de Comercio, Cédula y Certificado Bancario) antes de aprobar', 400, 'INCOMPLETE_QUOTATION');
+        throw new AppError('Debe adjuntar al menos una cotización completa con todos los documentos del proveedor (RUT, Cámara de Comercio y Cédula) antes de aprobar', 400, 'INCOMPLETE_QUOTATION');
       }
       // The comparative table is only required once there's actually something to compare.
       if (Quotation.countByRequisition(requisitionId) > 1 && !requisition.comparison_file_path) {

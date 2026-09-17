@@ -6,7 +6,7 @@
 
 ## 1. System Overview
 
-**CID Aprueba** is a web application that manages sequential, role-based approval of project quotations and proposals. Requisitions uploaded by users must pass through a chain of **7 sequential approval steps** (mapped to **6 role levels**) before reaching full approval status. Each step can only act on a requisition once the previous step has been approved. Note that role level 3 (Representante Legal) participates at two different steps (3 and 5).
+**CID Aprueba** is a web application that manages sequential, role-based approval of project quotations and proposals. Requisitions uploaded by users must pass through a chain of **8 sequential approval steps** (mapped to **6 role levels**) before reaching full approval status. Each step can only act on a requisition once the previous step has been approved. Role level 3 (Representante Legal) participates at two different steps (3 and 5); role level 4 (Encargado/a de Compras) also participates twice (4 and 6).
 
 ### Core Workflow
 
@@ -17,8 +17,9 @@ stateDiagram-v2
     Step3_Review --> Step4_Review: Step 3 approves
     Step4_Review --> Step5_Review: Step 4 approves (priced quotations attached)
     Step5_Review --> Step6_Review: Step 5 approves (quotation selected)
-    Step6_Review --> Step7_Review: Step 6 approves
-    Step7_Review --> Approved: Step 7 approves
+    Step6_Review --> Step7_Review: Step 6 approves (optional closing documents)
+    Step7_Review --> Step8_Review: Step 7 approves
+    Step8_Review --> Approved: Step 8 approves
     Step2_Review --> Returned_N: any step N≥2 returns "previous" (status returned, level N-1)
     Returned_N --> Step2_Review: approver at N-1 re-approves
     Step2_Review --> Returned_Start: any step returns "start" (level 1, awaits new version)
@@ -28,7 +29,7 @@ stateDiagram-v2
     Approved --> [*]
 ```
 
-Returns and terminal rejections are available from every step 2–7; the diagram shows them once for brevity.
+Returns and terminal rejections are available from every step 2–8; the diagram shows them once for brevity.
 
 ### Key Principles
 
@@ -290,7 +291,7 @@ erDiagram
 | `created_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 | `updated_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 
-**Note:** When a requisition is radicada, 7 `approval_steps` rows are created: step 1 `approved` (the upload is the radicación), steps 2–7 `pending`. `assigned_role_level` comes from `STEP_TO_ROLE_MAP` in [`config/workflow.js`](src/config/workflow.js). A return resets steps ≥ target back to `pending`.
+**Note:** When a requisition is radicada, 8 `approval_steps` rows are created: step 1 `approved` (the upload is the radicación), steps 2–8 `pending`. `assigned_role_level` comes from `STEP_TO_ROLE_MAP` in [`config/workflow.js`](src/config/workflow.js). A return resets steps ≥ target back to `pending`.
 
 #### `requisition_versions`
 
@@ -494,7 +495,7 @@ sequenceDiagram
 | **View dashboard metrics** | All authenticated users |
 | **View requisition list** | Filtered by `Requisition.findAll` / `findByStatus`: a requisition is visible once `current_approval_level` ≥ the lowest step assigned to the user's role, or once it is `approved`/`rejected` |
 | **Open requisition detail / download / history / quotations** | Same visibility rule, enforced by `loadVisibleRequisition` in `requisitionController.js` (403 otherwise) |
-| **Approve/Reject** | `STEP_TO_ROLE_MAP[current_approval_level]` must equal the user's role_level (role 3 acts at steps 3 and 5) |
+| **Approve/Reject** | `STEP_TO_ROLE_MAP[current_approval_level]` must equal the user's role_level (role 3 acts at steps 3 and 5; role 4 acts at steps 4 and 6) |
 | **Upload requisition** | Coordinadores de Territorio (role_level = 1) only |
 | **Manage users** | Representante Legal (role_level = 3) only — see Section 7.1 |
 
@@ -519,17 +520,18 @@ The frontend shows a **"Gestión de Usuarios"** tab in the navigation only when 
 
 ### Role Levels vs. Workflow Steps
 
-The system uses **6 role levels** but **7 workflow steps**. Role level 3 (Representante Legal) participates at two different steps. The mapping is defined in [`STEP_TO_ROLE_MAP`](src/models/ApprovalStep.js:8):
+The system uses **6 role levels** but **8 workflow steps**. Role level 3 (Representante Legal) and role level 4 (Encargado/a de Compras) each participate at two different steps. The mapping is defined in [`STEP_TO_ROLE_MAP`](src/config/workflow.js):
 
 ```javascript
 const STEP_TO_ROLE_MAP = {
   1: 1, // Coordinador/a de Territorio
   2: 2, // Director/a Programática
   3: 3, // Representante Legal (primera vez)
-  4: 4, // Encargado/a de Compras
+  4: 4, // Encargado/a de Compras (gestión de cotizaciones)
   5: 3, // Representante Legal (segunda vez — selecciona cotización)
-  6: 5, // Área Financiera
-  7: 6, // Área de Compras
+  6: 4, // Encargado/a de Compras (segunda vez — documentos de cierre)
+  7: 5, // Área Financiera
+  8: 6, // Área de Compras
 };
 ```
 
@@ -538,14 +540,14 @@ const STEP_TO_ROLE_MAP = {
 | 1 | Coordinador/a de Territorio | Step 1 |
 | 2 | Director/a Programática | Step 2 |
 | 3 | Representante Legal | Step 3 AND Step 5 |
-| 4 | Encargado/a de Compras | Step 4 |
-| 5 | Área Financiera | Step 6 |
-| 6 | Área de Compras | Step 7 |
+| 4 | Encargado/a de Compras | Step 4 AND Step 6 |
+| 5 | Área Financiera | Step 7 |
+| 6 | Área de Compras | Step 8 |
 
 ### Requisition Status Transitions
 
 ```
-IN_REVIEW (step 2) → … → IN_REVIEW (step 7) → APPROVED
+IN_REVIEW (step 2) → … → IN_REVIEW (step 8) → APPROVED
      ↕ RETURNED (level N-1: previous approver re-approves)
      ↕ RETURNED (level 1: coordinator resubmits a new version)
      ↘ REJECTED (terminal)
@@ -553,25 +555,27 @@ IN_REVIEW (step 2) → … → IN_REVIEW (step 7) → APPROVED
 
 `pending` is kept in the CHECK constraint for legacy rows only; new requisitions are never created in that state.
 
-### 7-Step Approval Flow
+### 8-Step Approval Flow
 
 | Step | Role | Action |
 |------|------|--------|
 | 1 | Coordinador/a de Territorio | Radicación: the upload itself completes this step (no approval action) |
 | 2 | Director/a Programática | Review + approve |
 | 3 | Representante Legal | Review + approve (first time) |
-| 4 | Encargado/a de Compras | Upload 1–3 quotations with supporting docs + approve |
+| 4 | Encargado/a de Compras | Upload 1–3 quotations with 3 mandatory supporting docs + approve |
 | 5 | Representante Legal | Review quotations, **select one**, approve (second time) |
-| 6 | Área Financiera | Review + approve |
-| 7 | Área de Compras | Final approval |
+| 6 | Encargado/a de Compras | Second approval; may attach up to 6 optional closing documents on the selected quotation (orden de compra, póliza, contrato, factura, cuenta de cobro, certificado bancario) — none required |
+| 7 | Área Financiera | Review + approve |
+| 8 | Área de Compras | Final approval |
 
 ### Per-Step Logic
 
-1. Coordinator radica (uploads) → one transaction creates the row with `number = REQ-<year>-<seq>`, `version = 1`, `status = 'in_review'`, `current_approval_level = FIRST_APPROVAL_LEVEL (2)`; the 7 `approval_steps` (step 1 `approved`, 2–7 `pending`); version 1 in `requisition_versions`; and an `approval_logs` entry `uploaded`.
-2. Steps 2–7 are approved by the role in `STEP_TO_ROLE_MAP`, with special behavior:
-   - **Step 4 (Encargado/a de Compras):** attaches 1–3 quotations, each with a mandatory `amount` (COP) and the 4 supporting documents; at least one complete quotation is required to approve
+1. Coordinator radica (uploads) → one transaction creates the row with `number = REQ-<year>-<seq>`, `version = 1`, `status = 'in_review'`, `current_approval_level = FIRST_APPROVAL_LEVEL (2)`; the 8 `approval_steps` (step 1 `approved`, 2–8 `pending`); version 1 in `requisition_versions`; and an `approval_logs` entry `uploaded`.
+2. Steps 2–8 are approved by the role in `STEP_TO_ROLE_MAP`, with special behavior:
+   - **Step 4 (Encargado/a de Compras):** attaches 1–3 quotations, each with a mandatory `amount` (COP) and 3 supporting documents (RUT, Cámara de Comercio, Cédula); at least one complete quotation is required to approve. A comparative table document (`comparison_file_path` on the requisition) is required only once there's more than one quotation.
    - **Step 5 (Representante Legal):** selects one quotation (`requisitions.selected_quotation_id`); auto-selected when only one exists
-3. Approving step 7 → `status = 'approved'`, `current_approval_level = 8`
+   - **Step 6 (Encargado/a de Compras, second approval):** may attach any of 6 optional closing documents to the selected quotation — none block approval
+3. Approving step 8 → `status = 'approved'`, `current_approval_level = 9`
 4. **Return** (`POST /return`, comments required) from step N:
    - `to: 'previous'` → `current_approval_level = N-1`; `to: 'start'` → `1`. From step 2 both land on 1.
    - Steps ≥ target reset to `pending`; if target ≤ 5 the quotation selection is cleared (quotations themselves are kept for rework)

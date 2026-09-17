@@ -9,12 +9,14 @@ const { idParam } = require('../middleware/validators');
 const { createUploader, fixUploadFilename } = require('../middleware/upload');
 const { requireQuotationStage, loadQuotation, loadDocument } = require('../middleware/quotationStage');
 const { requirePaymentStage } = require('../middleware/paymentStage');
-const { QUOTATION_DOC_TYPES } = require('../config/workflow');
+const { requireFinalPurchaseStage } = require('../middleware/finalPurchaseStage');
+const { QUOTATION_DOC_TYPES, OPTIONAL_QUOTATION_DOC_TYPES, FINAL_PURCHASE_DOC_TYPES } = require('../config/workflow');
 
 const router = express.Router();
 const upload = createUploader('quotations');
 
-const DOC_TYPES = Object.keys(QUOTATION_DOC_TYPES);
+const DOC_TYPES = [...Object.keys(QUOTATION_DOC_TYPES), ...Object.keys(OPTIONAL_QUOTATION_DOC_TYPES)];
+const FINAL_PURCHASE_DOC_TYPE_KEYS = Object.keys(FINAL_PURCHASE_DOC_TYPES);
 const PURCHASING = 4; // Encargado/a de Compras
 const FINANCE = 5; // Área Financiera
 
@@ -113,6 +115,36 @@ router.delete(
   validate,
   requireQuotationStage,
   asyncHandler(quotationController.deleteComparisonDocument),
+);
+
+// POST /api/requisitions/:requisitionId/final-purchase-documents — Encargado/a de Compras (segunda aprobación)
+// adjunta documentos de cierre opcionales sobre la cotización ya seleccionada.
+router.post(
+  '/:requisitionId/final-purchase-documents',
+  authorize(PURCHASING),
+  upload.single('file'),
+  fixUploadFilename,
+  [
+    idParam('requisitionId'),
+    body('doc_type').trim().isIn(FINAL_PURCHASE_DOC_TYPE_KEYS)
+      .withMessage(`Tipo de documento inválido. Debe ser uno de: ${FINAL_PURCHASE_DOC_TYPE_KEYS.join(', ')}`),
+  ],
+  validate,
+  requireFinalPurchaseStage,
+  loadQuotation,
+  asyncHandler(quotationController.uploadDocument),
+);
+
+// DELETE /api/requisitions/:requisitionId/final-purchase-documents/:documentId
+router.delete(
+  '/:requisitionId/final-purchase-documents/:documentId',
+  authorize(PURCHASING),
+  [idParam('requisitionId'), idParam('documentId')],
+  validate,
+  requireFinalPurchaseStage,
+  loadQuotation,
+  loadDocument,
+  asyncHandler(quotationController.deleteDocument),
 );
 
 // POST /api/requisitions/:requisitionId/payment-document — Área Financiera adjunta el comprobante de pago

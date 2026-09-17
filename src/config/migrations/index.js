@@ -25,6 +25,8 @@ const migrations = [
   require('./009_quotation_payment_terms'),
   require('./010_comparison_document'),
   require('./011_quotation_date'),
+  require('./012_second_purchase_step'),
+  require('./013_drop_doc_type_check'),
 ];
 
 /**

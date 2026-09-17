@@ -210,12 +210,17 @@ async function seedApprovedRequisition() {
     notes: 'Entrega en 15 días',
   }, 'cotizacion.pdf'));
   const qId = quotation.data.quotation.id;
-  for (const docType of ['rut', 'camara_comercio', 'cedula', 'certificado_bancario']) {
+  for (const docType of ['rut', 'camara_comercio', 'cedula']) {
     await api(compras, 'POST', `/requisitions/${req.id}/quotations/${qId}/documents`, pdfForm({ doc_type: docType }, `${docType}.pdf`));
   }
   await api(compras, 'POST', `/approvals/${req.id}/approve`, { comments: 'Cotizaciones completas (e2e)' });
 
   await approve('rep.legal', 'Cotización única seleccionada (e2e)');
+
+  // Step 6 — Encargado/a de Compras' second approval: closing documents, none mandatory.
+  await api(compras, 'POST', `/requisitions/${req.id}/final-purchase-documents`, pdfForm({ doc_type: 'certificado_bancario' }, 'certificado_bancario.pdf'));
+  await api(compras, 'POST', `/approvals/${req.id}/approve`, { comments: 'Segunda aprobación de compras (e2e)' });
+
   const financiera = await apiLogin('area.financiera');
   await api(financiera, 'POST', `/requisitions/${req.id}/payment-document`, pdfForm({}, 'comprobante-pago.pdf'));
   await approve('area.financiera', 'Aprobación financiera (e2e)');
@@ -223,7 +228,7 @@ async function seedApprovedRequisition() {
 
   const approved = final.data.requisition;
   if (approved.status !== 'approved') fail(`seeded requisition should be approved, got ${approved.status}`);
-  log(`seeded ${approved.number} through all 7 steps to "approved"`);
+  log(`seeded ${approved.number} through all 8 steps to "approved"`);
   return approved;
 }
 

@@ -33,11 +33,14 @@ export function MetaProvider({ children }) {
       return map[step] !== undefined ? map[step] : null;
     };
     const roleNameForStep = (step, gender) => roleName(stepRole(step), gender);
-    const maxStep = () => m.max_step || 7;
+    const maxStep = () => m.max_step || 8;
     const firstApprovalLevel = () => m.first_approval_level || 2;
     const currency = () => m.currency || 'COP';
     const docTypes = () => Object.entries(m.doc_types || {}).map(([key, label]) => ({ key, label }));
-    const paymentStep = () => m.payment_step || 6;
+    const optionalDocTypes = () => Object.entries(m.optional_doc_types || {}).map(([key, label]) => ({ key, label }));
+    const finalPurchaseStep = () => m.final_purchase_step || 6;
+    const finalPurchaseDocTypes = () => Object.entries(m.final_purchase_doc_types || {}).map(([key, label]) => ({ key, label }));
+    const paymentStep = () => m.payment_step || 7;
     const paymentDocType = () => m.payment_doc_type || 'comprobante_pago';
     const paymentDocLabel = () => m.payment_doc_label || 'Comprobante de Pago';
     const acceptAttr = () => (m.allowed_extensions || ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png']).join(',');
@@ -69,6 +72,9 @@ export function MetaProvider({ children }) {
       firstApprovalLevel,
       currency,
       docTypes,
+      optionalDocTypes,
+      finalPurchaseStep,
+      finalPurchaseDocTypes,
       paymentStep,
       paymentDocType,
       paymentDocLabel,

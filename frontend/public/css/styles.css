@@ -1892,6 +1892,12 @@ textarea.form__input {
   margin-top: 8px;
 }
 
+.quotation-card__documents--optional {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--color-border);
+}
+
 .quotation-card__documents-title {
   font-size: 0.8125rem;
   font-weight: 600;
@@ -1928,6 +1934,11 @@ textarea.form__input {
 
 .quotation-card__doc-status--missing {
   color: var(--color-text-light);
+}
+
+.quotation-card__doc-status--optional {
+  color: var(--color-text-light);
+  opacity: 0.75;
 }
 
 .quotation-card__attach-btn {

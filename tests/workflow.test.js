@@ -2,7 +2,8 @@ const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { start, login, as, cleanup, USERS, PDF } = require('./helpers');
 
-const DOC_TYPES = ['rut', 'camara_comercio', 'cedula', 'certificado_bancario'];
+const DOC_TYPES = ['rut', 'camara_comercio', 'cedula'];
+const FINAL_PURCHASE_DOC_TYPES = ['orden_compra', 'poliza', 'contrato', 'factura', 'cuenta_cobro', 'certificado_bancario'];
 const YEAR = new Date().getFullYear();
 const YESTERDAY = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
@@ -106,7 +107,7 @@ describe('Approval workflow', () => {
     assert.equal(ok.status, 201, ok.body.message);
   });
 
-  it('runs the full chain, requiring a priced, complete quotation at step 4', async () => {
+  it('runs the full 8-step chain, requiring a priced, complete quotation at step 4', async () => {
     const { id } = await createRequisition('Flujo completo');
 
     assert.equal((await approve('director', id)).status, 200);   // step 2
@@ -128,17 +129,74 @@ describe('Approval workflow', () => {
     assert.equal(step5.body.data.requisition.selected_quotation_id, quotationId);
     assert.equal(step5.body.data.requisition.selected_amount, 1250000);
 
+    // Second Compras approval (step 6): none of the closing documents are mandatory
+    const step6 = await approve('compras', id);
+    assert.equal(step6.status, 200, step6.body.message);
+    assert.equal(step6.body.data.requisition.current_approval_level, 7);
+
     // The comprobante de pago is mandatory before Área Financiera can approve
     const withoutDoc = await approve('financiera', id);
     assert.equal(withoutDoc.body.error, 'PAYMENT_DOCUMENT_REQUIRED');
     await as(tokens.financiera).post(`/api/requisitions/${id}/payment-document`).attach('file', PDF, 'pago.pdf');
-    assert.equal((await approve('financiera', id)).status, 200); // step 6
+    assert.equal((await approve('financiera', id)).status, 200); // step 7
 
-    const final = await approve('revisor', id);                  // step 7
+    const final = await approve('revisor', id);                  // step 8
     assert.equal(final.body.data.requisition.status, 'approved');
 
     assert.equal((await detail('revisor', id)).status, 200);     // finished → visible to all
     assert.equal((await approve('revisor', id)).body.error, 'ALREADY_APPROVED');
+  });
+
+  it('lets Encargado/a de Compras attach optional closing documents at the second approval (step 6), none mandatory', async () => {
+    const { id } = await createRequisition('Documentos de cierre');
+    await approve('director', id);
+    await approve('legal', id);
+    await addCompleteQuotation(id, 'Proveedor Cierre', 700000);
+    await approve('compras', id);
+    await approve('legal', id); // step 5 → selects the only quotation, lands on step 6
+
+    const detailAtStep6 = await detail('compras', id);
+    assert.equal(detailAtStep6.body.data.requisition.current_approval_level, 6);
+
+    // Wrong role, or wrong stage, cannot attach
+    assert.equal(
+      (await as(tokens.financiera).post(`/api/requisitions/${id}/final-purchase-documents`)
+        .field('doc_type', 'factura').attach('file', PDF, 'f.pdf')).status,
+      403,
+    );
+    assert.equal(
+      (await as(tokens.compras).post(`/api/requisitions/${id}/final-purchase-documents`)
+        .field('doc_type', 'not_a_real_type').attach('file', PDF, 'x.pdf')).status,
+      400,
+    );
+
+    // None of the 6 optional documents are required to approve
+    const approvedWithNone = await approve('compras', id);
+    assert.equal(approvedWithNone.status, 200, approvedWithNone.body.message);
+    assert.equal(approvedWithNone.body.data.requisition.current_approval_level, 7);
+  });
+
+  it('accepts all 6 optional final-purchase documents when Compras chooses to attach them', async () => {
+    const { id } = await createRequisition('Documentos de cierre completos');
+    await approve('director', id);
+    await approve('legal', id);
+    await addCompleteQuotation(id, 'Proveedor Completo', 700000);
+    await approve('compras', id);
+    await approve('legal', id); // now at step 6
+
+    for (const docType of FINAL_PURCHASE_DOC_TYPES) {
+      const uploaded = await as(tokens.compras).post(`/api/requisitions/${id}/final-purchase-documents`)
+        .field('doc_type', docType).attach('file', PDF, `${docType}.pdf`);
+      assert.equal(uploaded.status, 201, `${docType}: ${uploaded.body.message}`);
+    }
+
+    const withDocs = await detail('compras', id);
+    const quotation = withDocs.body.data.requisition.quotations[0];
+    for (const docType of FINAL_PURCHASE_DOC_TYPES) {
+      assert.ok(quotation.documents.some((d) => d.doc_type === docType), `missing ${docType}`);
+    }
+
+    assert.equal((await approve('compras', id)).status, 200);
   });
 
   it('rejects a future quotation date but accepts today or a past date', async () => {
@@ -199,13 +257,14 @@ describe('Approval workflow', () => {
     assert.equal((await approve('compras', id2)).status, 200);
   });
 
-  it('lets Área Financiera attach and remove a payment proof only at step 6, on the selected quotation', async () => {
+  it('lets Área Financiera attach and remove a payment proof only at step 7, on the selected quotation', async () => {
     const { id } = await createRequisition('Comprobante de pago');
     await approve('director', id);
     await approve('legal', id);
     const quotationId = await addCompleteQuotation(id, 'Proveedor Pago', 500000);
     await approve('compras', id);
-    await approve('legal', id); // step 6, selects the only quotation
+    await approve('legal', id); // step 5 → selects the only quotation, lands on step 6
+    await approve('compras', id); // step 6 (segunda aprobación) → now at step 7, Financiera
 
     // Wrong role, or too early/late, cannot upload
     assert.equal(
@@ -235,7 +294,7 @@ describe('Approval workflow', () => {
     assert.equal(withoutDoc.body.error, 'PAYMENT_DOCUMENT_REQUIRED');
 
     await as(tokens.financiera).post(`/api/requisitions/${id}/payment-document`).attach('file', PDF, 'pago3.pdf');
-    await approve('financiera', id); // step 7 now — upload window is closed
+    await approve('financiera', id); // step 8 now — upload window is closed
     assert.equal(
       (await as(tokens.financiera).post(`/api/requisitions/${id}/payment-document`).attach('file', PDF, 'tarde.pdf')).status,
       400,
@@ -370,7 +429,8 @@ describe('Approval workflow', () => {
     await approve('legal', id);
     await addCompleteQuotation(id, 'Proveedor Acta', 1234567);
     await approve('compras', id);
-    await approve('legal', id); // step 6
+    await approve('legal', id); // step 5 → selects, lands on step 6
+    await approve('compras', id); // step 6 (segunda aprobación)
     await as(tokens.financiera).post(`/api/requisitions/${id}/payment-document`).attach('file', PDF, 'pago.pdf');
     await approve('financiera', id);
     await approve('revisor', id);
