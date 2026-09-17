@@ -246,7 +246,10 @@ export default function CreateRequisition() {
               <textarea className="form__input" id="upload-description" rows={3} maxLength={1000} placeholder="Descripción opcional de la requisición" value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
             <div className="form__group">
-              <label className="form__label" htmlFor="upload-budget-cap">Presupuesto Máximo (COP)</label>
+              <div className="form__label-row">
+                <label className="form__label" htmlFor="upload-budget-cap">Presupuesto Máximo (COP)</label>
+                <span className="form__label-optional">Opcional</span>
+              </div>
               <input
                 className="form__input"
                 type="number"
@@ -258,12 +261,7 @@ export default function CreateRequisition() {
                 value={budgetCap}
                 onChange={(e) => setBudgetCap(e.target.value)}
               />
-              {budgetCap.trim() === '' || Number(budgetCap) === 0 ? (
-                <p className="form__hint form__hint--info">
-                  <span className="form__hint-icon" aria-hidden="true">✓</span>
-                  Sin presupuesto máximo definido — deja el campo en <strong>0</strong> (o vacío) si esta requisición todavía no tiene un límite de presupuesto.
-                </p>
-              ) : (
+              {budgetCap.trim() !== '' && Number(budgetCap) !== 0 && (
                 <p className="form__hint">Las cotizaciones de proveedores no podrán superar este valor.</p>
               )}
             </div>
