@@ -27,10 +27,12 @@ const ApprovalLog = {
   findRecent({ limit = 20 } = {}) {
     return db.prepare(`
       SELECT al.*, u.full_name AS user_name, u.username,
-             r.title AS requisition_title, r.number AS requisition_number
+             r.title AS requisition_title, r.number AS requisition_number,
+             p.name AS project_name, p.code AS project_code
       FROM approval_logs al
       JOIN users u ON al.user_id = u.id
       JOIN requisitions r ON al.requisition_id = r.id
+      LEFT JOIN projects p ON r.project_id = p.id
       ORDER BY al.created_at DESC, al.id DESC
       LIMIT ?
     `).all(limit);

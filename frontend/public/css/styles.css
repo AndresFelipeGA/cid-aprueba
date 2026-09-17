@@ -430,17 +430,9 @@ img {
   animation: hint-fade-in 0.18s var(--ease);
 }
 
-/* A hint that confirms a deliberate, valid choice (not a warning) — e.g. "sin presupuesto definido" */
-.form__hint--info {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  color: var(--color-secondary);
-  font-weight: 500;
-}
-
-.form__hint-icon {
-  flex-shrink: 0;
+/* A quieter hint for a default/optional value (e.g. "déjalo en 0") — not a warning, just a note */
+.form__hint--muted {
+  opacity: 0.7;
 }
 
 @keyframes hint-fade-in {
@@ -1332,6 +1324,11 @@ textarea.form__input {
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--color-text);
+}
+
+.pending-item__project {
+  font-weight: 400;
+  color: var(--color-text-light);
 }
 
 .pending-item__meta {
@@ -3894,6 +3891,10 @@ body,
 .activity-item__target {
   color: var(--color-warning-dark);
   font-weight: 500;
+}
+
+.activity-item__project {
+  color: var(--color-text-light);
 }
 
 [data-theme="dark"] .activity-item__target {

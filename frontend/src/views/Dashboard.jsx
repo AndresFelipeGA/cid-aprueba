@@ -192,7 +192,11 @@ function PendingItem({ requisition }) {
       <div className="pending-item__body">
         <div className="pending-item__title">
           {requisition.number && <span className="req-number">{requisition.number} </span>}
-          {requisition.title} <PendingTag requisition={requisition} />
+          {requisition.title}
+          {requisition.project_name && (
+            <span className="pending-item__project"> · {requisition.project_name}{requisition.project_code ? ` (${requisition.project_code})` : ''}</span>
+          )}
+          {' '}<PendingTag requisition={requisition} />
         </div>
         <div className="pending-item__meta">
           Radicada por {requisition.uploader_name} — {formatDateShort(requisition.created_at)} — {stepLabel(requisition.current_approval_level)}
@@ -225,6 +229,9 @@ function ActivityItem({ log, compact = false }) {
         )}
         {!compact && !log.requisition_number && (
           <> <Link to={`/requisitions/${log.requisition_id}`}>{log.requisition_title}</Link></>
+        )}
+        {!compact && log.project_name && (
+          <span className="activity-item__project"> · {log.project_name}{log.project_code ? ` (${log.project_code})` : ''}</span>
         )}
         {isReturn && log.to_level && (
           <span className="activity-item__target"> → paso {log.to_level} ({stepLabel(log.to_level)})</span>
