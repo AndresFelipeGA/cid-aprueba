@@ -13,7 +13,7 @@ import { usePageTitle } from '../context/PageTitleContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirm } from '../context/ConfirmContext.jsx';
 import { useDocumentModal } from '../context/DocumentModalContext.jsx';
-import { formatDate, formatDateShort, formatCurrency, formatPercent } from '../utils/format.js';
+import { formatDate, formatDateShort, formatDateOnly, formatCurrency, formatPercent } from '../utils/format.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 
 const OPEN_STATUSES = new Set(['pending', 'in_review', 'returned']);
@@ -97,7 +97,10 @@ function QuotationCard({ requisition, quotation, canEdit, onPreview, onDelete, o
           {isSelected && <span className="tag tag--success">Seleccionada</span>}
         </span>
       </div>
-      {paymentTerms && <div className="quotation-card__payment-terms">{paymentTerms}</div>}
+      <div className="quotation-card__tags">
+        {paymentTerms && <span className="quotation-card__payment-terms">{paymentTerms}</span>}
+        {quotation.quotation_date && <span className="quotation-card__quotation-date">Cotizada el {formatDateOnly(quotation.quotation_date)}</span>}
+      </div>
       {quotation.notes && <div className="quotation-card__notes">{quotation.notes}</div>}
       <div className="quotation-card__file">
         <span className="quotation-card__filename" role="button" tabIndex={0} title="Clic para vista previa" onClick={() => onPreview(quotation.original_filename)}>
@@ -168,15 +171,24 @@ function QuotationCard({ requisition, quotation, canEdit, onPreview, onDelete, o
 
 // --- Quotations panel ---
 
+/** Local YYYY-MM-DD (not UTC) so "today" matches what the date picker itself shows. */
+function todayLocal() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+}
+
 function QuotationForm({ requisitionId, budgetCap, onSubmitted, onCancel }) {
   const [provider, setProvider] = useState('');
   const [amount, setAmount] = useState('');
   const [advancePercent, setAdvancePercent] = useState('');
+  const [quotationDate, setQuotationDate] = useState('');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef(null);
+  const today = todayLocal();
 
   const remainderPercent = advancePercent.trim() === '' ? '' : String(Math.max(0, 100 - Number(advancePercent)));
 
@@ -195,6 +207,14 @@ function QuotationForm({ requisitionId, budgetCap, onSubmitted, onCancel }) {
       setFeedback({ type: 'error', message: `El monto no puede superar el presupuesto máximo de ${formatCurrency(budgetCap)}` });
       return;
     }
+    if (!quotationDate) {
+      setFeedback({ type: 'error', message: 'La fecha de la cotización es obligatoria' });
+      return;
+    }
+    if (quotationDate > today) {
+      setFeedback({ type: 'error', message: 'La fecha de la cotización no puede ser una fecha futura' });
+      return;
+    }
     const advanceNum = Number(advancePercent);
     if (advancePercent.trim() === '' || Number.isNaN(advanceNum) || advanceNum < 0 || advanceNum > 100) {
       setFeedback({ type: 'error', message: 'El anticipo es obligatorio y debe ser un porcentaje entre 0 y 100' });
@@ -208,6 +228,7 @@ function QuotationForm({ requisitionId, budgetCap, onSubmitted, onCancel }) {
     formData.append('provider_name', providerName);
     formData.append('amount', String(amountNum));
     formData.append('advance_percent', String(advanceNum));
+    formData.append('quotation_date', quotationDate);
     if (notes.trim()) formData.append('notes', notes.trim());
     formData.append('file', file);
 
@@ -232,6 +253,19 @@ function QuotationForm({ requisitionId, budgetCap, onSubmitted, onCancel }) {
         <label className="form__label" htmlFor="quotation-amount">Monto (COP)</label>
         <input className="form__input" type="number" id="quotation-amount" required min="1" max={budgetCap || undefined} step="1" inputMode="numeric" placeholder="Ej: 1250000" value={amount} onChange={(e) => setAmount(e.target.value)} />
         {budgetCap ? <p className="form__hint">No puede superar el presupuesto máximo de {formatCurrency(budgetCap)}.</p> : null}
+      </div>
+      <div className="quotation-form__field">
+        <label className="form__label" htmlFor="quotation-date">Fecha de la cotización</label>
+        <input
+          className="form__input"
+          type="date"
+          id="quotation-date"
+          required
+          max={today}
+          value={quotationDate}
+          onChange={(e) => setQuotationDate(e.target.value)}
+        />
+        <p className="form__hint">La fecha en que el proveedor emitió la cotización (no la de hoy, si la está subiendo después).</p>
       </div>
       <div className="quotation-form__field quotation-form__payment-terms">
         <div className="quotation-form__payment-terms-col">
@@ -270,6 +304,86 @@ function QuotationForm({ requisitionId, budgetCap, onSubmitted, onCancel }) {
         <button className="btn btn--primary btn--sm" id="btn-submit-quotation" disabled={busy} onClick={handleSubmit}>Subir Cotización</button>
         <button className="btn btn--outline btn--sm" type="button" onClick={onCancel}>Cancelar</button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Comparative table across all attached quotations — one file per requisition,
+ * not tied to any single provider. Optional with a single quotation, mandatory
+ * once there's more than one (enforced again server-side at approval time).
+ */
+function ComparisonDocumentBlock({ requisition, quotationCount, canEdit, onPreview, onReload }) {
+  const { showToast } = useToast();
+  const confirm = useConfirm();
+  const required = quotationCount > 1;
+  const filename = requisition.comparison_original_filename;
+
+  if (quotationCount === 0) return null;
+
+  const handleAttach = async (inputEl) => {
+    if (!inputEl.files || inputEl.files.length === 0) return;
+    const formData = new FormData();
+    formData.append('file', inputEl.files[0]);
+    try {
+      await API.uploadComparisonDocument(requisition.id, formData);
+      onReload();
+    } catch (err) {
+      showToast(err.message || 'Error al adjuntar el cuadro comparativo', 'error');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!(await confirm('¿Está seguro de eliminar el cuadro comparativo de cotizaciones?'))) return;
+    try {
+      await API.deleteComparisonDocument(requisition.id);
+      onReload();
+    } catch (err) {
+      showToast(err.message || 'Error al eliminar el cuadro comparativo', 'error');
+    }
+  };
+
+  return (
+    <div className="comparison-document" id="comparison-document" data-doc-missing={filename ? 'false' : 'true'} style={{ marginTop: 16 }}>
+      <label className="form__label">
+        Cuadro Comparativo de Cotizaciones{' '}
+        <span className={required ? 'comparison-document__required' : 'comparison-document__optional'}>
+          ({required ? 'Obligatorio' : 'Opcional'})
+        </span>
+      </label>
+      {filename ? (
+        <div className="quotation-card__doc-item">
+          <span
+            className="quotation-card__doc-status quotation-card__doc-status--complete quotation-card__doc-filename"
+            role="button"
+            tabIndex={0}
+            title="Clic para vista previa"
+            onClick={() => onPreview(() => API.downloadComparisonDocument(requisition.id), filename)}
+          >
+            ✅ {filename}
+          </span>
+          <div className="quotation-card__actions">
+            <button className="btn btn--outline btn--sm" onClick={() => onPreview(() => API.downloadComparisonDocument(requisition.id), filename)}>Ver</button>
+            {canEdit && <button className="btn btn--danger btn--sm" onClick={handleDelete}>Eliminar</button>}
+          </div>
+        </div>
+      ) : (
+        <div className="quotation-card__doc-item">
+          <span className="quotation-card__doc-status quotation-card__doc-status--missing">❌ Sin cuadro comparativo adjunto</span>
+          {canEdit && (
+            <label className="btn btn--outline btn--sm quotation-card__attach-btn">
+              Adjuntar
+              <input type="file" className="hidden" onChange={(e) => handleAttach(e.target)} />
+            </label>
+          )}
+        </div>
+      )}
+      {required && !filename && (
+        <div className="quotation-warning">
+          <span>⚠️</span>
+          <span>Debe adjuntar el cuadro comparativo antes de aprobar — es obligatorio al haber más de una cotización.</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -384,6 +498,14 @@ function QuotationsPanel({ requisition, quotations, user, onPreview, onReload })
           <span>Debe completar al menos una cotización con todos los documentos para poder aprobar.</span>
         </div>
       )}
+
+      <ComparisonDocumentBlock
+        requisition={requisition}
+        quotationCount={quotations.length}
+        canEdit={canEdit}
+        onPreview={onPreview}
+        onReload={onReload}
+      />
     </div>
   );
 }
@@ -562,6 +684,10 @@ function ApprovalPanel({ requisition, quotations, onPreview, onReload }) {
         setFeedback({ type: 'error', message: 'Debe adjuntar el comprobante de pago antes de aprobar.' });
         return;
       }
+    }
+    if (option === 'approve' && level === QUOTATION_STEP && quotations.length > 1 && !requisition.comparison_file_path) {
+      setFeedback({ type: 'error', message: 'Debe adjuntar el cuadro comparativo de cotizaciones antes de aprobar.' });
+      return;
     }
 
     if (opt.confirm && !(await confirm(opt.confirm))) return;

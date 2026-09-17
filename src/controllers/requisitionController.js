@@ -177,6 +177,15 @@ const requisitionController = {
     sendFile(res, version.file_path, version.original_filename);
   },
 
+  /** GET /api/requisitions/:id/comparison-document/download — visible to anyone who can see the requisition, not just Compras. */
+  downloadComparisonDocument(req, res) {
+    const requisition = loadVisibleRequisition(req.params.id, req.user);
+    if (!requisition.comparison_file_path) {
+      throw new AppError('Esta requisición no tiene un cuadro comparativo adjunto', 404, 'COMPARISON_DOCUMENT_NOT_FOUND');
+    }
+    sendFile(res, requisition.comparison_file_path, requisition.comparison_original_filename);
+  },
+
   /** GET /api/requisitions/:id/acta-consolidada.pdf — cover + every attached document merged into one PDF. */
   async downloadActaPdf(req, res) {
     const requisition = loadVisibleRequisition(req.params.id, req.user);

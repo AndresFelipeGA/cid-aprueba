@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const Requisition = require('../models/Requisition');
 const Quotation = require('../models/Quotation');
 const QuotationDocument = require('../models/QuotationDocument');
 const AppError = require('../utils/AppError');
@@ -65,6 +66,7 @@ const quotationController = {
       amount,
       notes: req.body.notes,
       advancePercent: req.body.advance_percent,
+      quotationDate: req.body.quotation_date,
       filePath: storeQuotationFile(req.file, requisitionId, 'cotizacion'),
       originalFilename: req.file.originalname,
       createdBy: req.user.id,
@@ -125,6 +127,43 @@ const quotationController = {
     logger.info(`Quotation document deleted: docId=${req.document.id}, quotationId=${req.quotation.id}, userId=${req.user.id}`);
 
     res.json({ success: true, data: null, message: 'Documento eliminado exitosamente' });
+  },
+
+  /**
+   * Encargado/a de Compras attaches the comparative table across all quotations
+   * (not tied to any single provider). Replaces any previous one. Guarded by
+   * requireQuotationStage — step 4, still pending.
+   */
+  uploadComparisonDocument(req, res) {
+    if (!req.file) {
+      throw new AppError('El archivo es requerido', 400, 'FILE_REQUIRED');
+    }
+    const previousPath = req.requisition.comparison_file_path;
+    if (previousPath && fs.existsSync(path.resolve(previousPath))) {
+      fs.unlinkSync(path.resolve(previousPath));
+    }
+
+    const requisition = Requisition.setComparisonDocument(req.requisition.id, {
+      filePath: storeQuotationFile(req.file, req.requisition.id, 'comparativo'),
+      originalFilename: req.file.originalname,
+    });
+
+    logger.info(`Comparison document uploaded: reqId=${req.requisition.id}, userId=${req.user.id}`);
+
+    res.status(201).json({ success: true, data: { requisition }, message: 'Cuadro comparativo subido exitosamente' });
+  },
+
+  deleteComparisonDocument(req, res) {
+    const previousPath = req.requisition.comparison_file_path;
+    if (previousPath && fs.existsSync(path.resolve(previousPath))) {
+      fs.unlinkSync(path.resolve(previousPath));
+    }
+
+    const requisition = Requisition.clearComparisonDocument(req.requisition.id);
+
+    logger.info(`Comparison document deleted: reqId=${req.requisition.id}, userId=${req.user.id}`);
+
+    res.json({ success: true, data: { requisition }, message: 'Cuadro comparativo eliminado exitosamente' });
   },
 
   downloadQuotationFile(req, res) {

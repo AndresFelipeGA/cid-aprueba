@@ -23,6 +23,8 @@ const migrations = [
   require('./007_payment_document'),
   require('./008_budget_cap'),
   require('./009_quotation_payment_terms'),
+  require('./010_comparison_document'),
+  require('./011_quotation_date'),
 ];
 
 /**

@@ -9,7 +9,7 @@ import * as API from '../api.js';
 import { useMeta } from '../context/MetaContext.jsx';
 import { usePageTitle } from '../context/PageTitleContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
-import { formatDate, formatCurrency } from '../utils/format.js';
+import { formatDate, formatDateOnly, formatCurrency } from '../utils/format.js';
 
 const COMPLETION_ACTIONS = new Set(['approved', 'uploaded', 'resubmitted']);
 
@@ -80,7 +80,7 @@ function Quotations({ requisition, quotations }) {
     <section className="acta__section">
       <h3 className="acta__section-title">Cotizaciones evaluadas</h3>
       <table className="acta__table">
-        <thead><tr><th>Proveedor</th><th>Monto</th><th>Documentación</th><th>Notas</th></tr></thead>
+        <thead><tr><th>Proveedor</th><th>Fecha cotización</th><th>Monto</th><th>Documentación</th><th>Notas</th></tr></thead>
         <tbody>
           {sorted.map((q) => {
             const selected = q.status === 'selected' || q.id === requisition.selected_quotation_id;
@@ -89,6 +89,7 @@ function Quotations({ requisition, quotations }) {
             return (
               <tr key={q.id} className={selected ? 'acta__row--selected' : ''}>
                 <td>{q.provider_name}{selected && <span className="acta__selected-tag"> Seleccionada</span>}</td>
+                <td>{q.quotation_date ? formatDateOnly(q.quotation_date) : '—'}</td>
                 <td className="acta__amount">{formatCurrency(q.amount)}</td>
                 <td>{complete ? 'Completa' : 'Incompleta'}</td>
                 <td className="acta__comments">{q.notes || ''}</td>

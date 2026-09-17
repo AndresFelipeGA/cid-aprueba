@@ -3854,6 +3854,13 @@ body,
   margin-bottom: 12px;
 }
 
+.quotation-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 .quotation-card__payment-terms {
   display: inline-block;
   font-size: 0.75rem;
@@ -3862,7 +3869,28 @@ body,
   background: rgba(107, 142, 35, 0.1);
   border-radius: 100px;
   padding: 2px 10px;
-  margin-bottom: 10px;
+}
+
+.quotation-card__quotation-date {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-light);
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 100px;
+  padding: 2px 10px;
+}
+
+.comparison-document__required {
+  color: var(--color-danger);
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.comparison-document__optional {
+  color: var(--color-text-light);
+  font-weight: 400;
+  font-size: 0.8125rem;
 }
 
 .quotation-card--selected {

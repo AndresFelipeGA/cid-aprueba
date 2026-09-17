@@ -206,6 +206,7 @@ async function seedApprovedRequisition() {
     provider_name: 'Proveedor E2E S.A.S.',
     amount: 1250000,
     advance_percent: 30,
+    quotation_date: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
     notes: 'Entrega en 15 días',
   }, 'cotizacion.pdf'));
   const qId = quotation.data.quotation.id;

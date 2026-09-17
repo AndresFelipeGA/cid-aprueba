@@ -4,6 +4,7 @@ const { start, login, as, cleanup, USERS, PDF } = require('./helpers');
 
 const DOC_TYPES = ['rut', 'camara_comercio', 'cedula', 'certificado_bancario'];
 const YEAR = new Date().getFullYear();
+const YESTERDAY = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
 const tokens = {};
 
@@ -29,6 +30,7 @@ async function addCompleteQuotation(reqId, provider, amount) {
     .field('provider_name', provider)
     .field('amount', String(amount))
     .field('advance_percent', '50')
+    .field('quotation_date', YESTERDAY)
     .attach('file', PDF, 'cotizacion.pdf');
   assert.equal(quotation.status, 201, quotation.body.message);
   const quotationId = quotation.body.data.quotation.id;
@@ -95,12 +97,12 @@ describe('Approval workflow', () => {
     await approve('legal', req.id); // step 4
 
     const tooHigh = await as(tokens.compras).post(`/api/requisitions/${req.id}/quotations`)
-      .field('provider_name', 'Muy caro').field('amount', '1500000').field('advance_percent', '100').attach('file', PDF, 'c.pdf');
+      .field('provider_name', 'Muy caro').field('amount', '1500000').field('advance_percent', '100').field('quotation_date', YESTERDAY).attach('file', PDF, 'c.pdf');
     assert.equal(tooHigh.status, 400);
     assert.equal(tooHigh.body.error, 'AMOUNT_EXCEEDS_BUDGET_CAP');
 
     const ok = await as(tokens.compras).post(`/api/requisitions/${req.id}/quotations`)
-      .field('provider_name', 'Dentro del tope').field('amount', '1000000').field('advance_percent', '100').attach('file', PDF, 'c.pdf');
+      .field('provider_name', 'Dentro del tope').field('amount', '1000000').field('advance_percent', '100').field('quotation_date', YESTERDAY).attach('file', PDF, 'c.pdf');
     assert.equal(ok.status, 201, ok.body.message);
   });
 
@@ -137,6 +139,64 @@ describe('Approval workflow', () => {
 
     assert.equal((await detail('revisor', id)).status, 200);     // finished → visible to all
     assert.equal((await approve('revisor', id)).body.error, 'ALREADY_APPROVED');
+  });
+
+  it('rejects a future quotation date but accepts today or a past date', async () => {
+    const { id } = await createRequisition('Fecha de cotización');
+    await approve('director', id);
+    await approve('legal', id);
+
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const future = await as(tokens.compras).post(`/api/requisitions/${id}/quotations`)
+      .field('provider_name', 'Proveedor').field('amount', '500000').field('advance_percent', '100')
+      .field('quotation_date', tomorrow).attach('file', PDF, 'c.pdf');
+    assert.equal(future.status, 400);
+
+    const missing = await as(tokens.compras).post(`/api/requisitions/${id}/quotations`)
+      .field('provider_name', 'Proveedor').field('amount', '500000').field('advance_percent', '100')
+      .attach('file', PDF, 'c.pdf');
+    assert.equal(missing.status, 400);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const ok = await as(tokens.compras).post(`/api/requisitions/${id}/quotations`)
+      .field('provider_name', 'Proveedor').field('amount', '500000').field('advance_percent', '100')
+      .field('quotation_date', today).attach('file', PDF, 'c.pdf');
+    assert.equal(ok.status, 201, ok.body.message);
+    assert.equal(ok.body.data.quotation.quotation_date, today);
+  });
+
+  it('requires the comparative quotations document only once there is more than one quotation', async () => {
+    const { id } = await createRequisition('Comparativo de cotizaciones');
+    await approve('director', id);
+    await approve('legal', id);
+
+    // A single quotation: the comparison document is optional.
+    await addCompleteQuotation(id, 'Único proveedor', 800000);
+    assert.equal((await approve('compras', id)).status, 200);
+
+    const { id: id2 } = await createRequisition('Comparativo obligatorio');
+    await approve('director', id2);
+    await approve('legal', id2);
+
+    // Two quotations: now it's required.
+    await addCompleteQuotation(id2, 'Proveedor A', 800000);
+    await addCompleteQuotation(id2, 'Proveedor B', 850000);
+    const blocked = await approve('compras', id2);
+    assert.equal(blocked.status, 400);
+    assert.equal(blocked.body.error, 'COMPARISON_DOCUMENT_REQUIRED');
+
+    // Only Encargado/a de Compras, and only at step 4, may attach it.
+    const wrongRole = await as(tokens.legal).post(`/api/requisitions/${id2}/comparison-document`).attach('file', PDF, 'comparativo.pdf');
+    assert.equal(wrongRole.status, 403);
+
+    const attached = await as(tokens.compras).post(`/api/requisitions/${id2}/comparison-document`).attach('file', PDF, 'comparativo.pdf');
+    assert.equal(attached.status, 201, attached.body.message);
+    assert.ok(attached.body.data.requisition.comparison_original_filename);
+
+    // Visible to anyone who can see the requisition (not just Compras).
+    assert.equal((await as(tokens.director).get(`/api/requisitions/${id2}/comparison-document/download`)).status, 200);
+
+    assert.equal((await approve('compras', id2)).status, 200);
   });
 
   it('lets Área Financiera attach and remove a payment proof only at step 6, on the selected quotation', async () => {

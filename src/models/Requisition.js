@@ -157,6 +157,23 @@ const Requisition = {
     return Requisition.findById(id);
   },
 
+  /** Attaches (or replaces) the comparative quotations document — one per requisition, not tied to any single provider. */
+  setComparisonDocument(id, { filePath, originalFilename }) {
+    db.prepare(`
+      UPDATE requisitions SET comparison_file_path = ?, comparison_original_filename = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(filePath, originalFilename, id);
+    return Requisition.findById(id);
+  },
+
+  clearComparisonDocument(id) {
+    db.prepare(`
+      UPDATE requisitions SET comparison_file_path = NULL, comparison_original_filename = NULL, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(id);
+    return Requisition.findById(id);
+  },
+
   // ── Versions ──────────────────────────────────────────────────────────
 
   addVersion({ requisitionId, version, title, description, filePath, originalFilename, comments, createdBy }) {

@@ -17,6 +17,12 @@ const DATE_SHORT = new Intl.DateTimeFormat('es-CO', {
   minute: '2-digit',
 });
 
+const DATE_ONLY = new Intl.DateTimeFormat('es-CO', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+});
+
 function formatWith(formatter, dateStr) {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
@@ -30,6 +36,16 @@ export function formatDate(dateStr) {
 
 export function formatDateShort(dateStr) {
   return formatWith(DATE_SHORT, dateStr);
+}
+
+/** For plain calendar dates (no time component), e.g. a "quotation issued on" date. */
+export function formatDateOnly(dateStr) {
+  if (!dateStr) return '—';
+  // Parse as a local calendar date, not UTC midnight, so it never shifts a day back/forward.
+  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  if (Number.isNaN(date.getTime())) return '—';
+  return DATE_ONLY.format(date);
 }
 
 const MINUTE = 60_000;

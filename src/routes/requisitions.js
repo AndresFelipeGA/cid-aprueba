@@ -71,6 +71,14 @@ router.post(
 // GET /api/requisitions/:id/download
 router.get('/:id/download', [idParam()], validate, asyncHandler(requisitionController.download));
 
+// GET /api/requisitions/:id/comparison-document/download
+router.get(
+  '/:id/comparison-document/download',
+  [idParam()],
+  validate,
+  asyncHandler(requisitionController.downloadComparisonDocument),
+);
+
 // GET /api/requisitions/:id/versions/:versionId/download
 router.get(
   '/:id/versions/:versionId/download',

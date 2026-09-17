@@ -252,6 +252,19 @@ export function deletePaymentDocument(requisitionId, documentId) {
   return request('DELETE', `/requisitions/${requisitionId}/payment-document/${documentId}`);
 }
 
+/** Comparative table across all quotations — one per requisition, not tied to a single provider. */
+export function uploadComparisonDocument(requisitionId, formData) {
+  return request('POST', `/requisitions/${requisitionId}/comparison-document`, formData, true);
+}
+
+export function deleteComparisonDocument(requisitionId) {
+  return request('DELETE', `/requisitions/${requisitionId}/comparison-document`);
+}
+
+export function downloadComparisonDocument(requisitionId) {
+  return request('GET', `/requisitions/${requisitionId}/comparison-document/download`);
+}
+
 // --- Projects ---
 
 export function getProjects() {

@@ -43,6 +43,8 @@ const roleName = (roleLevel) => (ROLE_NAMES[roleLevel] || {}).default || `Nivel 
 const roleNameForStep = (step) => roleName(STEP_TO_ROLE_MAP[step]);
 const formatCurrency = (n) => `$ ${Math.round(Number(n) || 0).toLocaleString('es-CO')}`;
 const formatDate = (d) => (d ? new Date(d).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
+/** For plain calendar dates (no time component), e.g. when a quotation was actually issued. */
+const formatDateOnly = (d) => (d ? new Date(d).toLocaleDateString('es-CO', { dateStyle: 'medium' }) : '—');
 const COMPLETION_ACTIONS = new Set(['approved', 'uploaded', 'resubmitted']);
 
 /** Minimal word-wrap for a fixed-width text block. */
@@ -236,16 +238,18 @@ async function buildActaCoverPdf(requisition) {
     const sorted = [...quotations].sort((a, b) => Number(a.amount) - Number(b.amount));
     table(
       [
-        { label: 'Proveedor', width: 160, get: (r) => r.proveedor },
+        { label: 'Proveedor', width: 140, get: (r) => r.proveedor },
+        { label: 'Fecha cotización', width: 85, get: (r) => r.fecha },
         { label: 'Monto', width: 90, get: (r) => r.monto },
         { label: 'Documentación', width: 90, get: (r) => r.docs },
-        { label: 'Notas', width: width - 340, get: (r) => r.notas },
+        { label: 'Notas', width: width - 405, get: (r) => r.notas },
       ],
       sorted.map((q) => {
         const isSelected = q.status === 'selected' || q.id === requisition.selected_quotation_id;
         const complete = requiredDocs.every((dt) => (q.documents || []).some((d) => d.doc_type === dt));
         return {
           proveedor: `${q.provider_name}${isSelected ? ' (Seleccionada)' : ''}`,
+          fecha: formatDateOnly(q.quotation_date),
           monto: formatCurrency(q.amount),
           docs: complete ? 'Completa' : 'Incompleta',
           notas: q.notes || '',

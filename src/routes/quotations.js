@@ -40,6 +40,11 @@ router.post(
       .withMessage('El nombre del proveedor debe tener entre 2 y 255 caracteres'),
     body('amount').isFloat({ min: 1 }).withMessage('El monto de la cotización es requerido y debe ser mayor a cero').toFloat(),
     body('advance_percent').isFloat({ min: 0, max: 100 }).withMessage('El anticipo debe ser un porcentaje entre 0 y 100').toFloat(),
+    body('quotation_date')
+      .notEmpty().withMessage('La fecha de la cotización es requerida')
+      .isISO8601().withMessage('La fecha de la cotización no es válida')
+      .custom((value) => value.slice(0, 10) <= new Date().toISOString().slice(0, 10))
+      .withMessage('La fecha de la cotización no puede ser una fecha futura'),
     body('notes').optional({ values: 'falsy' }).trim().isLength({ max: 500 }).withMessage('Las notas deben tener máximo 500 caracteres'),
   ],
   validate,
@@ -86,6 +91,28 @@ router.delete(
   loadQuotation,
   loadDocument,
   asyncHandler(quotationController.deleteDocument),
+);
+
+// POST /api/requisitions/:requisitionId/comparison-document — Encargado/a de Compras adjunta el cuadro comparativo de cotizaciones
+router.post(
+  '/:requisitionId/comparison-document',
+  authorize(PURCHASING),
+  upload.single('file'),
+  fixUploadFilename,
+  [idParam('requisitionId')],
+  validate,
+  requireQuotationStage,
+  asyncHandler(quotationController.uploadComparisonDocument),
+);
+
+// DELETE /api/requisitions/:requisitionId/comparison-document
+router.delete(
+  '/:requisitionId/comparison-document',
+  authorize(PURCHASING),
+  [idParam('requisitionId')],
+  validate,
+  requireQuotationStage,
+  asyncHandler(quotationController.deleteComparisonDocument),
 );
 
 // POST /api/requisitions/:requisitionId/payment-document — Área Financiera adjunta el comprobante de pago
