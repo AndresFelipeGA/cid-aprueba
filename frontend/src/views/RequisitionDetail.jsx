@@ -1477,7 +1477,7 @@ export default function RequisitionDetail() {
           <QuotationsPanel requisition={requisition} quotations={quotations} user={user} onPreview={preview} onReload={reload} />
           {canAct && (
             <div ref={approvalPanelRef}>
-              <ApprovalPanel requisition={requisition} quotations={quotations} onPreview={preview} onReload={reload} />
+              <ApprovalPanel key={requisition.current_approval_level} requisition={requisition} quotations={quotations} onPreview={preview} onReload={reload} />
             </div>
           )}
         </div>
