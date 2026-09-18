@@ -6,7 +6,7 @@ const QuotationDocument = require('../models/QuotationDocument');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 const config = require('../config/env');
-const { PAYMENT_DOC_TYPE } = require('../config/workflow');
+const { PAYMENT_DOC_TYPE, FINAL_PAYMENT_DOC_TYPE } = require('../config/workflow');
 const { loadVisibleRequisition } = require('./requisitionController');
 
 /**
@@ -103,7 +103,7 @@ const quotationController = {
     res.status(201).json({ success: true, data: { document }, message: 'Documento subido exitosamente' });
   },
 
-  /** Área Financiera attaches proof of payment to the selected quotation (guarded by requirePaymentStage). */
+  /** Tesorería attaches proof of the advance payment to the selected quotation (guarded by requirePaymentStage). */
   uploadPaymentDocument(req, res) {
     if (!req.file) {
       throw new AppError('El archivo es requerido', 400, 'FILE_REQUIRED');
@@ -119,6 +119,24 @@ const quotationController = {
     logger.info(`Payment document uploaded: docId=${document.id}, quotationId=${req.quotation.id}, reqId=${req.requisition.id}, userId=${req.user.id}`);
 
     res.status(201).json({ success: true, data: { document }, message: 'Comprobante de pago subido exitosamente' });
+  },
+
+  /** Tesorería attaches proof of the final (balance) payment (guarded by requireFinalPaymentStage). */
+  uploadFinalPaymentDocument(req, res) {
+    if (!req.file) {
+      throw new AppError('El archivo es requerido', 400, 'FILE_REQUIRED');
+    }
+
+    const document = QuotationDocument.create({
+      quotationId: req.quotation.id,
+      docType: FINAL_PAYMENT_DOC_TYPE,
+      filePath: storeQuotationFile(req.file, req.requisition.id, FINAL_PAYMENT_DOC_TYPE),
+      originalFilename: req.file.originalname,
+    });
+
+    logger.info(`Final payment document uploaded: docId=${document.id}, quotationId=${req.quotation.id}, reqId=${req.requisition.id}, userId=${req.user.id}`);
+
+    res.status(201).json({ success: true, data: { document }, message: 'Comprobante de pago del saldo final subido exitosamente' });
   },
 
   deleteDocument(req, res) {

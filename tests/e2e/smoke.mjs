@@ -221,14 +221,35 @@ async function seedApprovedRequisition() {
   await api(compras, 'POST', `/requisitions/${req.id}/final-purchase-documents`, pdfForm({ doc_type: 'certificado_bancario' }, 'certificado_bancario.pdf'));
   await api(compras, 'POST', `/approvals/${req.id}/approve`, { comments: 'Segunda aprobación de compras (e2e)' });
 
-  const financiera = await apiLogin('area.financiera');
-  await api(financiera, 'POST', `/requisitions/${req.id}/payment-document`, pdfForm({}, 'comprobante-pago.pdf'));
+  // Step 7 — Área Financiera: reviews and approves only, no documents.
   await approve('area.financiera', 'Aprobación financiera (e2e)');
-  const final = await approve('area.compras', 'Aprobación final (e2e)');
+
+  // Step 8 — Tesorería: attaches the advance payment proof and approves.
+  const tesoreria = await apiLogin('tesoreria');
+  await api(tesoreria, 'POST', `/requisitions/${req.id}/payment-document`, pdfForm({}, 'comprobante-anticipo.pdf'));
+  await approve('tesoreria', 'Aprobación de tesorería — anticipo (e2e)');
+
+  // Step 9 — Encargado/a de Compras confirms the advance was received.
+  await approve('enc.compras', 'Confirmación del anticipo (e2e)');
+
+  // Step 10 — Encargado/a de Compras attaches delivery documents (optional) and approves.
+  await api(compras, 'POST', `/requisitions/${req.id}/delivery-documents`, pdfForm({ doc_type: 'acta_entrega' }, 'acta-entrega.pdf'));
+  await approve('enc.compras', 'Entrega confirmada (e2e)');
+
+  // Step 11 — Tesorería attaches the final payment proof and approves.
+  await api(tesoreria, 'POST', `/requisitions/${req.id}/final-payment-document`, pdfForm({}, 'comprobante-saldo.pdf'));
+  await approve('tesoreria', 'Aprobación de tesorería — pago final (e2e)');
+
+  // Step 12 — joint closure: Coordinador/a de Territorio attaches a closing document and,
+  // together with Encargado/a de Compras (either order), approves to close the requisition.
+  const territorio = await apiLogin('coord.territorio');
+  await api(territorio, 'POST', `/requisitions/${req.id}/closure-listing`, pdfForm({}, 'listados.pdf'));
+  await approve('enc.compras', 'Cierre — mitad de Compras (e2e)');
+  const final = await approve('coord.territorio', 'Cierre — mitad de Coordinación (e2e)');
 
   const approved = final.data.requisition;
   if (approved.status !== 'approved') fail(`seeded requisition should be approved, got ${approved.status}`);
-  log(`seeded ${approved.number} through all 8 steps to "approved"`);
+  log(`seeded ${approved.number} through all 12 steps to "approved"`);
   return approved;
 }
 

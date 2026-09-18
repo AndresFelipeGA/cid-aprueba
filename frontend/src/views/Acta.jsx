@@ -13,8 +13,8 @@ import { formatDate, formatDateOnly, formatCurrency } from '../utils/format.js';
 
 const COMPLETION_ACTIONS = new Set(['approved', 'uploaded', 'resubmitted']);
 
-function completionLog(step, logs) {
-  return logs.find((l) => l.approval_step_id === step.id && COMPLETION_ACTIONS.has(l.action)) || null;
+function completionLogs(step, logs) {
+  return logs.filter((l) => l.approval_step_id === step.id && COMPLETION_ACTIONS.has(l.action));
 }
 
 function StepsTable({ steps, logs }) {
@@ -22,15 +22,16 @@ function StepsTable({ steps, logs }) {
   const rows = [];
   for (let level = 1; level <= maxStep(); level++) {
     const step = steps.find((s) => s.step_level === level);
-    const log = step ? completionLog(step, logs) : null;
+    const stepLogs = step ? completionLogs(step, logs) : [];
+    const log = stepLogs[0] || null;
     rows.push(
       <tr key={level}>
         <td className="acta__step-no">{level}</td>
         <td>{stepLabel(level)}</td>
         <td>{roleNameForStep(level, log ? log.user_gender : null)}</td>
-        <td>{log ? log.user_name : '—'}</td>
+        <td>{stepLogs.length ? stepLogs.map((l) => l.user_name).join(' y ') : '—'}</td>
         <td>{log ? formatDate(log.created_at) : '—'}</td>
-        <td className="acta__comments">{log && log.comments ? log.comments : ''}</td>
+        <td className="acta__comments">{stepLogs.filter((l) => l.comments).map((l) => l.comments).join(' / ')}</td>
       </tr>,
     );
   }
@@ -108,10 +109,12 @@ function Signatures({ steps, logs }) {
   const signers = [];
   for (let level = 1; level <= maxStep(); level++) {
     const step = steps.find((s) => s.step_level === level);
-    const log = step ? completionLog(step, logs) : null;
-    if (!log || seen.has(log.user_id)) continue;
-    seen.add(log.user_id);
-    signers.push({ name: log.user_name, role: roleName(log.user_role_level, log.user_gender) });
+    const stepLogs = step ? completionLogs(step, logs) : [];
+    for (const log of stepLogs) {
+      if (seen.has(log.user_id)) continue;
+      seen.add(log.user_id);
+      signers.push({ name: log.user_name, role: roleName(log.user_role_level, log.user_gender) });
+    }
   }
   if (signers.length === 0) return null;
   return (

@@ -270,6 +270,49 @@ export function deleteComparisonDocument(requisitionId) {
   return request('DELETE', `/requisitions/${requisitionId}/comparison-document`);
 }
 
+/** Tesorería's final (balance) payment proof, on the selected quotation. */
+export function uploadFinalPaymentDocument(requisitionId, formData) {
+  return request('POST', `/requisitions/${requisitionId}/final-payment-document`, formData, true);
+}
+
+export function deleteFinalPaymentDocument(requisitionId, documentId) {
+  return request('DELETE', `/requisitions/${requisitionId}/final-payment-document/${documentId}`);
+}
+
+/** Encargado/a de Compras' delivery documents (factura, cuenta de cobro, acta de entrega) — all optional. */
+export function uploadDeliveryDocument(requisitionId, formData) {
+  return request('POST', `/requisitions/${requisitionId}/delivery-documents`, formData, true);
+}
+
+export function deleteDeliveryDocument(requisitionId, documentId) {
+  return request('DELETE', `/requisitions/${requisitionId}/delivery-documents/${documentId}`);
+}
+
+/** Closure step (12): Coordinador/a de Territorio's Listados / Actas — at least one required to approve. */
+export function uploadClosureListing(requisitionId, formData) {
+  return request('POST', `/requisitions/${requisitionId}/closure-listing`, formData, true);
+}
+
+export function deleteClosureListing(requisitionId) {
+  return request('DELETE', `/requisitions/${requisitionId}/closure-listing`);
+}
+
+export function downloadClosureListing(requisitionId) {
+  return request('GET', `/requisitions/${requisitionId}/closure-listing/download`);
+}
+
+export function uploadClosureMinutes(requisitionId, formData) {
+  return request('POST', `/requisitions/${requisitionId}/closure-minutes`, formData, true);
+}
+
+export function deleteClosureMinutes(requisitionId) {
+  return request('DELETE', `/requisitions/${requisitionId}/closure-minutes`);
+}
+
+export function downloadClosureMinutes(requisitionId) {
+  return request('GET', `/requisitions/${requisitionId}/closure-minutes/download`);
+}
+
 export function downloadComparisonDocument(requisitionId) {
   return request('GET', `/requisitions/${requisitionId}/comparison-document/download`);
 }

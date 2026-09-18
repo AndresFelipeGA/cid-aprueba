@@ -29,9 +29,12 @@ describe('Validation, authorization wiring and upload hygiene', () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.data.step_to_role['5'], 3);
     assert.equal(res.body.data.step_to_role['6'], 4);
-    assert.equal(res.body.data.max_step, 8);
+    assert.deepEqual(res.body.data.step_to_role['12'], [1, 4]);
+    assert.equal(res.body.data.max_step, 12);
     assert.ok(res.body.data.doc_types.rut);
     assert.ok(res.body.data.final_purchase_doc_types.certificado_bancario);
+    assert.ok(res.body.data.delivery_doc_types.acta_entrega);
+    assert.equal(res.body.data.closure_doc_labels.listing, 'Listados');
   });
 
   it('enforces roles through authorize(): users API, requisition upload, project creation', async () => {

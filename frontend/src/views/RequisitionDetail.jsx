@@ -719,15 +719,237 @@ function FinalPurchasePanel({ requisition, quotations, onPreview, onReload }) {
   );
 }
 
+/** Encargado/a de Compras' delivery step: optional documents once the items have been handed over. */
+function DeliveryDocsPanel({ requisition, quotations, onPreview, onReload }) {
+  const { deliveryDocTypes } = useMeta();
+  const { showToast } = useToast();
+  const selected = quotations.find((q) => q.id === requisition.selected_quotation_id);
+  if (!selected) {
+    return <div className="alert alert--error">No hay una cotización seleccionada para esta requisición.</div>;
+  }
+  const docs = selected.documents || [];
+
+  const handleAttach = async (docType, inputEl) => {
+    if (!inputEl.files || inputEl.files.length === 0) return;
+    const formData = new FormData();
+    formData.append('doc_type', docType);
+    formData.append('file', inputEl.files[0]);
+    try {
+      await API.uploadDeliveryDocument(requisition.id, formData);
+      onReload();
+    } catch (err) {
+      showToast(err.message || 'Error al adjuntar el documento', 'error');
+    }
+  };
+
+  const handleDeleteDoc = async (docId) => {
+    try {
+      await API.deleteDeliveryDocument(requisition.id, docId);
+      onReload();
+    } catch (err) {
+      showToast(err.message || 'Error al eliminar el documento', 'error');
+    }
+  };
+
+  return (
+    <div className="quotation-card__documents" id="delivery-documents" style={{ marginBottom: 16 }}>
+      <div className="quotation-card__documents-title">
+        Documentos de Entrega — {selected.provider_name} ({formatCurrency(selected.amount)})
+      </div>
+      {deliveryDocTypes().map((docType) => (
+        <DocRow
+          key={docType.key}
+          docType={docType}
+          doc={docs.find((d) => d.doc_type === docType.key)}
+          canEdit
+          optional
+          onPreview={(filename, docId) => onPreview(() => API.downloadQuotationDocument(requisition.id, selected.id, docId), filename)}
+          onAttachDoc={handleAttach}
+          onDeleteDoc={handleDeleteDoc}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Tesorería's second approval: proof of the final (balance) payment on the selected quotation. */
+function FinalPaymentPanel({ requisition, quotations, onPreview, onReload }) {
+  const { finalPaymentDocType, finalPaymentDocLabel } = useMeta();
+  const { showToast } = useToast();
+  const confirm = useConfirm();
+  const selected = quotations.find((q) => q.id === requisition.selected_quotation_id);
+  if (!selected) {
+    return <div className="alert alert--error">No hay una cotización seleccionada para esta requisición.</div>;
+  }
+  const doc = (selected.documents || []).find((d) => d.doc_type === finalPaymentDocType());
+
+  const handleAttach = async (inputEl) => {
+    if (!inputEl.files || inputEl.files.length === 0) return;
+    const formData = new FormData();
+    formData.append('file', inputEl.files[0]);
+    try {
+      await API.uploadFinalPaymentDocument(requisition.id, formData);
+      onReload();
+    } catch (err) {
+      showToast(err.message || 'Error al adjuntar el comprobante de pago', 'error');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!(await confirm('¿Está seguro de eliminar el comprobante de pago?'))) return;
+    try {
+      await API.deleteFinalPaymentDocument(requisition.id, doc.id);
+      onReload();
+    } catch (err) {
+      showToast(err.message || 'Error al eliminar el comprobante de pago', 'error');
+    }
+  };
+
+  return (
+    <div className="payment-document" id="final-payment-document" data-doc-missing={doc ? 'false' : 'true'} style={{ marginBottom: 16 }}>
+      <label className="form__label">{finalPaymentDocLabel()} — {selected.provider_name} ({formatCurrency(selected.amount)})</label>
+      {doc ? (
+        <div className="quotation-card__doc-item">
+          <span
+            className="quotation-card__doc-status quotation-card__doc-status--complete quotation-card__doc-filename"
+            role="button"
+            tabIndex={0}
+            title="Clic para vista previa"
+            onClick={() => onPreview(() => API.downloadQuotationDocument(requisition.id, selected.id, doc.id), doc.original_filename)}
+          >
+            ✅ {doc.original_filename}
+          </span>
+          <div className="quotation-card__actions">
+            <button className="btn btn--outline btn--sm" onClick={() => onPreview(() => API.downloadQuotationDocument(requisition.id, selected.id, doc.id), doc.original_filename)}>Ver</button>
+            <button className="btn btn--danger btn--sm" onClick={handleDelete}>Eliminar</button>
+          </div>
+        </div>
+      ) : (
+        <div className="quotation-card__doc-item">
+          <span className="quotation-card__doc-status quotation-card__doc-status--missing">❌ Sin comprobante adjunto</span>
+          <label className="btn btn--outline btn--sm quotation-card__attach-btn">
+            Adjuntar
+            <input type="file" className="hidden" onChange={(e) => handleAttach(e.target)} />
+          </label>
+        </div>
+      )}
+      {!doc && (
+        <div className="quotation-warning">
+          <span>⚠️</span>
+          <span>Debe adjuntar el comprobante de pago antes de poder aprobar.</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Closure step (12): Coordinador/a de Territorio and Encargado/a de Compras each approve
+ * independently. The coordinator also attaches Listados/Actas — at least one required.
+ * Shown to whichever of the two hasn't yet recorded their half; shows a waiting message
+ * to whoever already has.
+ */
+function ClosurePanel({ requisition, onReload }) {
+  const { user } = useAuth();
+  const { closureDocLabels } = useMeta();
+  const { showToast } = useToast();
+  const confirm = useConfirm();
+  const isCompras = user.role_level === 4;
+  const alreadyApproved = isCompras ? requisition.final_compras_approved_at : requisition.final_coordinador_approved_at;
+  const otherAlreadyApproved = isCompras ? requisition.final_coordinador_approved_at : requisition.final_compras_approved_at;
+  const labels = closureDocLabels();
+
+  if (alreadyApproved) {
+    return (
+      <div className="alert alert--success" style={{ marginBottom: 16 }}>
+        Ya registró su aprobación de cierre. {otherAlreadyApproved ? '' : 'Falta la aprobación del otro rol para cerrar la requisición.'}
+      </div>
+    );
+  }
+
+  if (!isCompras) {
+    // Coordinador/a de Territorio: must attach at least one closing document.
+    const handleAttach = async (which, inputEl) => {
+      if (!inputEl.files || inputEl.files.length === 0) return;
+      const formData = new FormData();
+      formData.append('file', inputEl.files[0]);
+      try {
+        await (which === 'listing' ? API.uploadClosureListing(requisition.id, formData) : API.uploadClosureMinutes(requisition.id, formData));
+        onReload();
+      } catch (err) {
+        showToast(err.message || 'Error al adjuntar el documento', 'error');
+      }
+    };
+    const handleDelete = async (which) => {
+      if (!(await confirm('¿Está seguro de eliminar este documento?'))) return;
+      try {
+        await (which === 'listing' ? API.deleteClosureListing(requisition.id) : API.deleteClosureMinutes(requisition.id));
+        onReload();
+      } catch (err) {
+        showToast(err.message || 'Error al eliminar el documento', 'error');
+      }
+    };
+    const row = (which, label, filename) => (
+      <div className="quotation-card__doc-item" key={which}>
+        {filename ? (
+          <>
+            <span className="quotation-card__doc-status quotation-card__doc-status--complete">✅ {label}: {filename}</span>
+            <div className="quotation-card__actions">
+              <button className="btn btn--danger btn--sm" onClick={() => handleDelete(which)}>Eliminar</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <span className="quotation-card__doc-status quotation-card__doc-status--missing">❌ {label}: (sin adjuntar)</span>
+            <div className="quotation-card__actions">
+              <label className="btn btn--outline btn--sm quotation-card__attach-btn">
+                Adjuntar
+                <input type="file" className="hidden" onChange={(e) => handleAttach(which, e.target)} />
+              </label>
+            </div>
+          </>
+        )}
+      </div>
+    );
+    const hasAny = requisition.closure_listing_original_filename || requisition.closure_minutes_original_filename;
+    return (
+      <div className="quotation-card__documents" id="closure-documents" style={{ marginBottom: 16 }}>
+        <div className="quotation-card__documents-title">Documentos de Cierre — al menos uno es obligatorio</div>
+        {row('listing', labels.listing, requisition.closure_listing_original_filename)}
+        {row('minutes', labels.minutes, requisition.closure_minutes_original_filename)}
+        {!hasAny && (
+          <div className="quotation-warning">
+            <span>⚠️</span>
+            <span>Debe adjuntar al menos uno de los dos documentos antes de poder aprobar.</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Encargado/a de Compras: nothing to upload, just approves their half.
+  return otherAlreadyApproved ? (
+    <div className="alert alert--info" style={{ marginBottom: 16 }}>
+      El/la Coordinador/a de Territorio ya registró su aprobación de cierre. Falta la suya.
+    </div>
+  ) : null;
+}
+
 // --- Approval panel ---
 
 function ApprovalPanel({ requisition, quotations, onPreview, onReload }) {
   const { user } = useAuth();
-  const { stepLabel, roleNameForStep, firstApprovalLevel, paymentStep, paymentDocType, finalPurchaseStep } = useMeta();
+  const {
+    stepLabel, roleNameForStep, firstApprovalLevel, paymentStep, paymentDocType, finalPurchaseStep,
+    deliveryStep, finalPaymentStep, finalPaymentDocType, closureStep,
+  } = useMeta();
   const { showToast } = useToast();
   const confirm = useConfirm();
   const level = requisition.current_approval_level;
   const isSelectionStep = level === SELECTION_STEP;
+  const isClosureStep = level === closureStep();
+  const closureApprovedByMe = isClosureStep
+    && (user.role_level === 4 ? requisition.final_compras_approved_at : requisition.final_coordinador_approved_at);
   const showPrevious = level > firstApprovalLevel();
 
   const [option, setOption] = useState('approve');
@@ -770,6 +992,24 @@ function ApprovalPanel({ requisition, quotations, onPreview, onReload }) {
     if (option === 'approve' && level === QUOTATION_STEP && quotations.length > 1 && !requisition.comparison_file_path) {
       setFeedback({ type: 'error', message: 'Debe adjuntar el cuadro comparativo de cotizaciones antes de aprobar.' });
       return;
+    }
+    if (option === 'approve' && level === finalPaymentStep()) {
+      const selected = quotations.find((q) => q.id === requisition.selected_quotation_id);
+      const doc = selected && (selected.documents || []).find((d) => d.doc_type === finalPaymentDocType());
+      if (selected && !doc) {
+        setFeedback({ type: 'error', message: 'Debe adjuntar el comprobante de pago del saldo final antes de aprobar.' });
+        return;
+      }
+    }
+    if (option === 'approve' && isClosureStep) {
+      if (closureApprovedByMe) {
+        setFeedback({ type: 'error', message: 'Ya registró su aprobación de cierre; falta la del otro rol.' });
+        return;
+      }
+      if (user.role_level !== 4 && !requisition.closure_listing_file_path && !requisition.closure_minutes_file_path) {
+        setFeedback({ type: 'error', message: 'Debe adjuntar al menos uno de los documentos de cierre (Listados o Actas) antes de aprobar.' });
+        return;
+      }
     }
 
     if (opt.confirm && !(await confirm(opt.confirm))) return;
@@ -828,38 +1068,51 @@ function ApprovalPanel({ requisition, quotations, onPreview, onReload }) {
       {!isSelectionStep && level === paymentStep() && (
         <PaymentPanel requisition={requisition} quotations={quotations} onPreview={onPreview} onReload={onReload} />
       )}
+      {!isSelectionStep && level === deliveryStep() && (
+        <DeliveryDocsPanel requisition={requisition} quotations={quotations} onPreview={onPreview} onReload={onReload} />
+      )}
+      {!isSelectionStep && level === finalPaymentStep() && (
+        <FinalPaymentPanel requisition={requisition} quotations={quotations} onPreview={onPreview} onReload={onReload} />
+      )}
+      {!isSelectionStep && isClosureStep && (
+        <ClosurePanel requisition={requisition} onReload={onReload} />
+      )}
 
-      <fieldset className="approval-options" id="approval-options">
-        <legend className="form__label">Decisión</legend>
-        {optionRow('approve')}
-        {showPrevious && optionRow('return_previous')}
-        {optionRow('return_start')}
-        {optionRow('reject')}
-      </fieldset>
-      <div className="form__group">
-        <label className="form__label" htmlFor="approval-comments">
-          Comentarios <span className={`approval-panel__required${option === 'approve' ? ' hidden' : ''}`}>(obligatorios)</span>
-        </label>
-        <textarea
-          className={`form__input${commentsInvalid ? ' form__input--invalid' : ''}`}
-          id="approval-comments"
-          rows={3}
-          placeholder={opt.placeholder}
-          value={comments}
-          onChange={(e) => setComments(e.target.value)}
-        />
-        <div className={`form__error${commentsInvalid ? '' : ' hidden'}`} id="approval-comments-error">
-          Los comentarios son obligatorios para devolver o rechazar una requisición.
-        </div>
-      </div>
-      <div id="approval-feedback">
-        {feedback && <div className={`alert alert--${feedback.type}`}>{feedback.message}</div>}
-      </div>
-      <div className="approval-panel__actions">
-        <button className={`btn ${opt.btnClass}`} id="btn-approval-submit" disabled={busy} onClick={handleSubmit}>
-          {opt.shortLabel || opt.label}
-        </button>
-      </div>
+      {!closureApprovedByMe && (
+        <>
+          <fieldset className="approval-options" id="approval-options">
+            <legend className="form__label">Decisión</legend>
+            {optionRow('approve')}
+            {showPrevious && optionRow('return_previous')}
+            {optionRow('return_start')}
+            {optionRow('reject')}
+          </fieldset>
+          <div className="form__group">
+            <label className="form__label" htmlFor="approval-comments">
+              Comentarios <span className={`approval-panel__required${option === 'approve' ? ' hidden' : ''}`}>(obligatorios)</span>
+            </label>
+            <textarea
+              className={`form__input${commentsInvalid ? ' form__input--invalid' : ''}`}
+              id="approval-comments"
+              rows={3}
+              placeholder={opt.placeholder}
+              value={comments}
+              onChange={(e) => setComments(e.target.value)}
+            />
+            <div className={`form__error${commentsInvalid ? '' : ' hidden'}`} id="approval-comments-error">
+              Los comentarios son obligatorios para devolver o rechazar una requisición.
+            </div>
+          </div>
+          <div id="approval-feedback">
+            {feedback && <div className={`alert alert--${feedback.type}`}>{feedback.message}</div>}
+          </div>
+          <div className="approval-panel__actions">
+            <button className={`btn ${opt.btnClass}`} id="btn-approval-submit" disabled={busy} onClick={handleSubmit}>
+              {opt.shortLabel || opt.label}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1097,7 +1350,7 @@ export default function RequisitionDetail() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { stepRole, stepLabel, roleNameForStep, firstApprovalLevel } = useMeta();
+  const { stepRoles, stepLabel, roleNameForStep, firstApprovalLevel } = useMeta();
   const openDocumentModal = useDocumentModal();
 
   const [requisition, setRequisition] = useState(null);
@@ -1116,7 +1369,7 @@ export default function RequisitionDetail() {
   const reload = () => setReloadToken((t) => t + 1);
 
   const level = requisition ? requisition.current_approval_level : null;
-  const canAct = Boolean(requisition && user && user.role_level === stepRole(level) && level >= firstApprovalLevel() && isOpen(requisition));
+  const canAct = Boolean(requisition && user && stepRoles(level).includes(user.role_level) && level >= firstApprovalLevel() && isOpen(requisition));
 
   useEffect(() => {
     if (!focusedRef.current && canAct && searchParams.get('focus') === 'approve' && approvalPanelRef.current) {

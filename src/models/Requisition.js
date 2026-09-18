@@ -1,6 +1,6 @@
 const db = require('../config/database');
 const Quotation = require('./Quotation');
-const { STEP_TO_ROLE_MAP, FIRST_APPROVAL_LEVEL } = require('../config/workflow');
+const { STEP_TO_ROLE_MAP, rolesForStep, FIRST_APPROVAL_LEVEL } = require('../config/workflow');
 
 const FINAL_STATUSES = ['approved', 'rejected'];
 const OPEN_STATUSES = ['pending', 'in_review', 'returned'];
@@ -21,9 +21,9 @@ const SELECT_WITH_JOINS = `
  * have acted on it (e.g. returned it to an earlier step).
  */
 const minStepForRole = (roleLevel) => {
-  const steps = Object.entries(STEP_TO_ROLE_MAP)
-    .filter(([, role]) => role === roleLevel)
-    .map(([step]) => parseInt(step, 10));
+  const steps = Object.keys(STEP_TO_ROLE_MAP)
+    .map((step) => parseInt(step, 10))
+    .filter((step) => rolesForStep(step).includes(roleLevel));
   return steps.length ? Math.min(...steps) : Infinity;
 };
 
@@ -174,6 +174,56 @@ const Requisition = {
     return Requisition.findById(id);
   },
 
+  // ── Closure step (12): Coordinador/a de Territorio's documents ────────
+
+  setClosureListing(id, { filePath, originalFilename }) {
+    db.prepare(`
+      UPDATE requisitions SET closure_listing_file_path = ?, closure_listing_original_filename = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(filePath, originalFilename, id);
+    return Requisition.findById(id);
+  },
+
+  clearClosureListing(id) {
+    db.prepare(`
+      UPDATE requisitions SET closure_listing_file_path = NULL, closure_listing_original_filename = NULL, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(id);
+    return Requisition.findById(id);
+  },
+
+  setClosureMinutes(id, { filePath, originalFilename }) {
+    db.prepare(`
+      UPDATE requisitions SET closure_minutes_file_path = ?, closure_minutes_original_filename = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(filePath, originalFilename, id);
+    return Requisition.findById(id);
+  },
+
+  clearClosureMinutes(id) {
+    db.prepare(`
+      UPDATE requisitions SET closure_minutes_file_path = NULL, closure_minutes_original_filename = NULL, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(id);
+    return Requisition.findById(id);
+  },
+
+  /** Records one half of the joint closure approval (step 12). `who` is 'compras' or 'coordinador'. */
+  setFinalApproval(id, who) {
+    const column = who === 'compras' ? 'final_compras_approved_at' : 'final_coordinador_approved_at';
+    db.prepare(`UPDATE requisitions SET ${column} = datetime('now'), updated_at = datetime('now') WHERE id = ?`).run(id);
+    return Requisition.findById(id);
+  },
+
+  /** Voids both halves of the joint closure approval — used when either party returns or the step resets. */
+  clearFinalApprovals(id) {
+    db.prepare(`
+      UPDATE requisitions SET final_compras_approved_at = NULL, final_coordinador_approved_at = NULL, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(id);
+    return Requisition.findById(id);
+  },
+
   // ── Versions ──────────────────────────────────────────────────────────
 
   addVersion({ requisitionId, version, title, description, filePath, originalFilename, comments, createdBy }) {
@@ -277,11 +327,14 @@ const Requisition = {
    * For role 1 this means requisitions returned to step 1 awaiting a new version.
    */
   findPendingForRole(roleLevel, { limit = 20, offset = 0 } = {}) {
-    const steps = Object.entries(STEP_TO_ROLE_MAP)
-      .filter(([, role]) => role === roleLevel)
-      .map(([step]) => parseInt(step, 10));
+    const steps = Object.keys(STEP_TO_ROLE_MAP)
+      .map((step) => parseInt(step, 10))
+      .filter((step) => rolesForStep(step).includes(roleLevel));
     const placeholders = steps.map(() => '?').join(',');
-    const where = `r.current_approval_level IN (${placeholders}) AND r.status IN ('pending', 'in_review', 'returned')`;
+    // At the joint closure step, a role that already recorded its half no longer has anything pending there.
+    const closureColumn = roleLevel === 4 ? 'final_compras_approved_at' : roleLevel === 1 ? 'final_coordinador_approved_at' : null;
+    const closureGuard = closureColumn ? ` AND (r.current_approval_level != 12 OR r.${closureColumn} IS NULL)` : '';
+    const where = `r.current_approval_level IN (${placeholders}) AND r.status IN ('pending', 'in_review', 'returned')${closureGuard}`;
 
     const items = db.prepare(`
       ${SELECT_WITH_JOINS} WHERE ${where}

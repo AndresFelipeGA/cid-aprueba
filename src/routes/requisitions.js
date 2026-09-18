@@ -79,6 +79,22 @@ router.get(
   asyncHandler(requisitionController.downloadComparisonDocument),
 );
 
+// GET /api/requisitions/:id/closure-listing/download
+router.get(
+  '/:id/closure-listing/download',
+  [idParam()],
+  validate,
+  asyncHandler(requisitionController.downloadClosureListing),
+);
+
+// GET /api/requisitions/:id/closure-minutes/download
+router.get(
+  '/:id/closure-minutes/download',
+  [idParam()],
+  validate,
+  asyncHandler(requisitionController.downloadClosureMinutes),
+);
+
 // GET /api/requisitions/:id/versions/:versionId/download
 router.get(
   '/:id/versions/:versionId/download',

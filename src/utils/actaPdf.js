@@ -15,7 +15,8 @@ const path = require('path');
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const {
   STEP_LABELS, ROLE_NAMES, STATUS_LABELS, MAX_STEP_LEVEL, QUOTATION_DOC_TYPES, OPTIONAL_QUOTATION_DOC_TYPES,
-  FINAL_PURCHASE_DOC_TYPES, PAYMENT_DOC_TYPE, PAYMENT_DOC_LABEL, STEP_TO_ROLE_MAP,
+  FINAL_PURCHASE_DOC_TYPES, DELIVERY_DOC_TYPES, PAYMENT_DOC_TYPE, PAYMENT_DOC_LABEL,
+  FINAL_PAYMENT_DOC_TYPE, FINAL_PAYMENT_DOC_LABEL, rolesForStep,
 } = require('../config/workflow');
 
 const PAGE_SIZE = [595.28, 841.89]; // A4 in points
@@ -41,7 +42,7 @@ function truncate(font, text, size, maxWidth) {
 }
 
 const roleName = (roleLevel) => (ROLE_NAMES[roleLevel] || {}).default || `Nivel ${roleLevel}`;
-const roleNameForStep = (step) => roleName(STEP_TO_ROLE_MAP[step]);
+const roleNameForStep = (step) => rolesForStep(step).map(roleName).join(' y ');
 const formatCurrency = (n) => `$ ${Math.round(Number(n) || 0).toLocaleString('es-CO')}`;
 const formatDate = (d) => (d ? new Date(d).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 /** For plain calendar dates (no time component), e.g. when a quotation was actually issued. */
@@ -83,6 +84,8 @@ async function buildActaCoverPdf(requisition) {
   const quotations = requisition.quotations || [];
   const finalLog = logs.find((l) => l.action === 'approved') || null;
   const completionLog = (step) => logs.find((l) => l.approval_step_id === step.id && COMPLETION_ACTIONS.has(l.action)) || null;
+  // Step 12 (closure) can have two completion logs — one per approver — where every other step has at most one.
+  const completionLogs = (step) => logs.filter((l) => l.approval_step_id === step.id && COMPLETION_ACTIONS.has(l.action));
 
   let page = doc.addPage(PAGE_SIZE);
   let y = PAGE_SIZE[1] - MARGIN;
@@ -197,14 +200,14 @@ async function buildActaCoverPdf(requisition) {
     Array.from({ length: MAX_STEP_LEVEL }, (_, i) => {
       const level = i + 1;
       const step = steps.find((s) => s.step_level === level);
-      const log = step ? completionLog(step) : null;
+      const stepLogs = step ? completionLogs(step) : [];
       return {
         level,
         paso: STEP_LABELS[level],
         rol: roleNameForStep(level),
-        por: log ? log.user_name : '—',
-        fecha: log ? formatDate(log.created_at) : '—',
-        comentarios: (log && log.comments) || '',
+        por: stepLogs.length ? stepLogs.map((l) => l.user_name).join(' y ') : '—',
+        fecha: stepLogs.length ? formatDate(stepLogs[0].created_at) : '—',
+        comentarios: stepLogs.map((l) => l.comments).filter(Boolean).join(' / '),
       };
     }),
   );
@@ -263,10 +266,12 @@ async function buildActaCoverPdf(requisition) {
   const signers = [];
   for (let level = 1; level <= MAX_STEP_LEVEL; level++) {
     const step = steps.find((s) => s.step_level === level);
-    const log = step ? completionLog(step) : null;
-    if (!log || seen.has(log.user_id)) continue;
-    seen.add(log.user_id);
-    signers.push({ name: log.user_name, role: roleName(log.user_role_level) });
+    if (!step) continue;
+    for (const log of completionLogs(step)) {
+      if (seen.has(log.user_id)) continue;
+      seen.add(log.user_id);
+      signers.push({ name: log.user_name, role: roleName(log.user_role_level) });
+    }
   }
   if (signers.length > 0) {
     heading('Firmas');
@@ -335,12 +340,15 @@ async function appendFile(doc, font, bold, sectionTitle, filePath, originalFilen
 /** Selected quotation's required + optional provider documents that were actually attached, in a stable order. */
 function selectedProviderDocs(requisition) {
   const selected = (requisition.quotations || []).find((q) => q.id === requisition.selected_quotation_id);
-  if (!selected) return { provider: null, docs: [] };
-  const docs = Object.entries({ ...QUOTATION_DOC_TYPES, ...OPTIONAL_QUOTATION_DOC_TYPES, ...FINAL_PURCHASE_DOC_TYPES })
+  if (!selected) return { provider: null, docs: [], payment: null, finalPayment: null };
+  const docs = Object.entries({
+    ...QUOTATION_DOC_TYPES, ...OPTIONAL_QUOTATION_DOC_TYPES, ...FINAL_PURCHASE_DOC_TYPES, ...DELIVERY_DOC_TYPES,
+  })
     .map(([key, label]) => ({ label, doc: (selected.documents || []).find((d) => d.doc_type === key) }))
     .filter((d) => d.doc);
   const payment = (selected.documents || []).find((d) => d.doc_type === PAYMENT_DOC_TYPE);
-  return { provider: selected, docs, payment };
+  const finalPayment = (selected.documents || []).find((d) => d.doc_type === FINAL_PAYMENT_DOC_TYPE);
+  return { provider: selected, docs, payment, finalPayment };
 }
 
 /** Cover + requisition file + payment proof + the winning provider's documents, merged into one PDF. */
@@ -352,12 +360,21 @@ async function buildConsolidatedActaPdf(requisition) {
 
   await appendFile(doc, font, bold, 'Requisición Original', requisition.file_path, requisition.original_filename);
 
-  const { docs, payment } = selectedProviderDocs(requisition);
+  const { docs, payment, finalPayment } = selectedProviderDocs(requisition);
   if (payment) {
     await appendFile(doc, font, bold, PAYMENT_DOC_LABEL, payment.file_path, payment.original_filename);
   }
   for (const { label, doc: providerDoc } of docs) {
     await appendFile(doc, font, bold, `Proveedor — ${label}`, providerDoc.file_path, providerDoc.original_filename);
+  }
+  if (finalPayment) {
+    await appendFile(doc, font, bold, FINAL_PAYMENT_DOC_LABEL, finalPayment.file_path, finalPayment.original_filename);
+  }
+  if (requisition.closure_listing_file_path) {
+    await appendFile(doc, font, bold, 'Listado de Cierre', requisition.closure_listing_file_path, requisition.closure_listing_original_filename);
+  }
+  if (requisition.closure_minutes_file_path) {
+    await appendFile(doc, font, bold, 'Acta de Cierre', requisition.closure_minutes_file_path, requisition.closure_minutes_original_filename);
   }
 
   return Buffer.from(await doc.save());
@@ -381,11 +398,18 @@ async function buildActaZipStream(requisition, coverPdfBuffer) {
 
   addIfExists('01', 'requisicion', requisition.file_path, requisition.original_filename);
 
-  const { docs, payment } = selectedProviderDocs(requisition);
-  if (payment) addIfExists('02', 'comprobante-pago', payment.file_path, payment.original_filename);
+  const { docs, payment, finalPayment } = selectedProviderDocs(requisition);
+  if (payment) addIfExists('02', 'comprobante-pago-anticipo', payment.file_path, payment.original_filename);
   docs.forEach(({ label, doc: providerDoc }, i) => {
     addIfExists(String(3 + i).padStart(2, '0'), label, providerDoc.file_path, providerDoc.original_filename);
   });
+  if (finalPayment) addIfExists('90', 'comprobante-pago-saldo-final', finalPayment.file_path, finalPayment.original_filename);
+  if (requisition.closure_listing_file_path) {
+    addIfExists('91', 'listado-cierre', requisition.closure_listing_file_path, requisition.closure_listing_original_filename);
+  }
+  if (requisition.closure_minutes_file_path) {
+    addIfExists('92', 'acta-cierre', requisition.closure_minutes_file_path, requisition.closure_minutes_original_filename);
+  }
 
   archive.finalize();
   return archive;

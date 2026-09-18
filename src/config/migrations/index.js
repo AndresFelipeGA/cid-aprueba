@@ -27,6 +27,7 @@ const migrations = [
   require('./011_quotation_date'),
   require('./012_second_purchase_step'),
   require('./013_drop_doc_type_check'),
+  require('./014_treasury_and_closure'),
 ];
 
 /**
