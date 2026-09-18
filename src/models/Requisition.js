@@ -112,7 +112,9 @@ const Requisition = {
 
   /** Next readable number, REQ-<year>-<4-digit sequence within the year>. Call inside a transaction. */
   nextNumber(date = new Date()) {
-    const year = String(date.getFullYear());
+    // The server clock runs in UTC; use Colombia's calendar year so a requisition radicada
+    // late on Dec 31 (Bogotá time) isn't numbered under the new year a few hours early.
+    const year = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric' }).format(date);
     const { count } = db.prepare("SELECT COUNT(*) as count FROM requisitions WHERE number LIKE ?").get(`REQ-${year}-%`);
     return `REQ-${year}-${String(count + 1).padStart(4, '0')}`;
   },

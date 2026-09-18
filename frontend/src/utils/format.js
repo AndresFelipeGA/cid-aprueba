@@ -2,7 +2,11 @@
    CID Aprueba — Formatting helpers
    ============================================ */
 
+/** All requisition activity happens in Colombia; timestamps always display in this timezone. */
+const APP_TIMEZONE = 'America/Bogota';
+
 const DATE_LONG = new Intl.DateTimeFormat('es-CO', {
+  timeZone: APP_TIMEZONE,
   year: 'numeric',
   month: 'short',
   day: 'numeric',
@@ -11,6 +15,7 @@ const DATE_LONG = new Intl.DateTimeFormat('es-CO', {
 });
 
 const DATE_SHORT = new Intl.DateTimeFormat('es-CO', {
+  timeZone: APP_TIMEZONE,
   month: 'short',
   day: 'numeric',
   hour: '2-digit',
@@ -23,9 +28,21 @@ const DATE_ONLY = new Intl.DateTimeFormat('es-CO', {
   day: 'numeric',
 });
 
+/**
+ * The backend stores `created_at`/`updated_at` as SQLite's `datetime('now')`, which is
+ * UTC written *without* a timezone marker (e.g. "2026-09-18 18:40:00"). Handed to `Date`
+ * as-is, that naive string gets parsed as local time instead of UTC, shifting every
+ * timestamp forward by the viewer's UTC offset. Mark it explicitly as UTC before parsing.
+ */
+function toUtcDate(dateStr) {
+  const hasZoneMarker = /Z$|[+-]\d\d:?\d\d$/.test(dateStr);
+  const isoish = hasZoneMarker ? dateStr : `${dateStr.replace(' ', 'T')}Z`;
+  return new Date(isoish);
+}
+
 function formatWith(formatter, dateStr) {
   if (!dateStr) return '—';
-  const date = new Date(dateStr);
+  const date = toUtcDate(dateStr);
   if (Number.isNaN(date.getTime())) return '—';
   return formatter.format(date);
 }
@@ -55,7 +72,7 @@ const DAY = 24 * HOUR;
 /** "hace 5 min" / "hace 2 h" / "hace 3 d"; falls back to formatDateShort past 7 days. */
 export function formatRelativeTime(dateStr) {
   if (!dateStr) return '—';
-  const date = new Date(dateStr);
+  const date = toUtcDate(dateStr);
   if (Number.isNaN(date.getTime())) return '—';
   const diff = Date.now() - date.getTime();
 

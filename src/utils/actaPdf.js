@@ -44,9 +44,29 @@ function truncate(font, text, size, maxWidth) {
 const roleName = (roleLevel) => (ROLE_NAMES[roleLevel] || {}).default || `Nivel ${roleLevel}`;
 const roleNameForStep = (step) => rolesForStep(step).map(roleName).join(' y ');
 const formatCurrency = (n) => `$ ${Math.round(Number(n) || 0).toLocaleString('es-CO')}`;
-const formatDate = (d) => (d ? new Date(d).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
-/** For plain calendar dates (no time component), e.g. when a quotation was actually issued. */
-const formatDateOnly = (d) => (d ? new Date(d).toLocaleDateString('es-CO', { dateStyle: 'medium' }) : '—');
+
+/** All requisition activity happens in Colombia; timestamps always display in this timezone. */
+const APP_TIMEZONE = 'America/Bogota';
+
+/**
+ * `created_at`/`updated_at` come from SQLite's `datetime('now')` — UTC, written *without*
+ * a timezone marker (e.g. "2026-09-18 18:40:00"). Handed to `Date` as-is on a server whose
+ * local timezone isn't UTC, that naive string would be misparsed. Mark it explicitly as UTC.
+ */
+function toUtcDate(d) {
+  if (d instanceof Date) return d;
+  const hasZoneMarker = /Z$|[+-]\d\d:?\d\d$/.test(d);
+  return new Date(hasZoneMarker ? d : `${d.replace(' ', 'T')}Z`);
+}
+
+const formatDate = (d) => (d ? toUtcDate(d).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short', timeZone: APP_TIMEZONE }) : '—');
+/** For plain calendar dates (no time component, e.g. when a quotation was actually issued): render the stored y-m-d as-is, with no timezone conversion that could shift it a day. */
+const formatDateOnly = (d) => {
+  if (!d) return '—';
+  const [y, m, day] = d.slice(0, 10).split('-').map(Number);
+  if (!y || !m || !day) return '—';
+  return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString('es-CO', { dateStyle: 'medium', timeZone: 'UTC' });
+};
 const COMPLETION_ACTIONS = new Set(['approved', 'uploaded', 'resubmitted']);
 
 /** Minimal word-wrap for a fixed-width text block. */

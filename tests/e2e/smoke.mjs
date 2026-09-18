@@ -372,6 +372,9 @@ async function run(page) {
   await page.click('#btn-approval-submit');
   await expectVisible(page, '#confirm-dialog[open]', 'return confirmation dialog');
   await page.click('#confirm-dialog-accept');
+  await expectVisible(page, '.approval-result-dialog[open]', 'step-change acknowledgment popup after return');
+  await expectText(page, '#approval-result-title', 'Devuelta al inicio', 'result popup title matches the action taken');
+  await page.click('#approval-result-accept');
   await expectText(page, '.req-detail__heading .badge', 'Devuelta', 'status badge after return');
   await expectVisible(page, '.returned-banner', 'returned banner');
   await expectVisible(page, '.activity-item--returned', 'returned entry in history');

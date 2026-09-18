@@ -27,6 +27,9 @@ const APPROVAL_OPTIONS = {
     btnClass: 'btn--secondary',
     busy: 'Aprobando...',
     placeholder: 'Comentarios opcionales para la aprobación',
+    resultIcon: '✅',
+    resultTone: 'success',
+    resultTitle: '¡Aprobado!',
   },
   return_previous: {
     label: 'Devolver al paso anterior',
@@ -34,6 +37,9 @@ const APPROVAL_OPTIONS = {
     busy: 'Devolviendo...',
     placeholder: 'Explique el motivo de la devolución (obligatorio)',
     confirm: 'La requisición volverá al paso anterior para que sea revisada nuevamente. ¿Desea continuar?',
+    resultIcon: '↩️',
+    resultTone: 'warning',
+    resultTitle: 'Devuelta',
   },
   return_start: {
     label: 'Devolver al inicio (nueva versión del documento)',
@@ -42,6 +48,9 @@ const APPROVAL_OPTIONS = {
     busy: 'Devolviendo...',
     placeholder: 'Explique qué debe corregirse en la nueva versión (obligatorio)',
     confirm: 'La requisición volverá al inicio y el/la coordinador/a deberá radicar una nueva versión del documento. ¿Desea continuar?',
+    resultIcon: '↩️',
+    resultTone: 'warning',
+    resultTitle: 'Devuelta al inicio',
   },
   reject: {
     label: 'Rechazar definitivamente',
@@ -49,6 +58,9 @@ const APPROVAL_OPTIONS = {
     busy: 'Rechazando...',
     placeholder: 'Explique el motivo del rechazo (obligatorio)',
     confirm: 'El rechazo es definitivo: la requisición quedará cerrada y no podrá continuar. ¿Desea continuar?',
+    resultIcon: '⛔',
+    resultTone: 'danger',
+    resultTitle: 'Rechazada',
   },
 };
 
@@ -943,7 +955,6 @@ function ApprovalPanel({ requisition, quotations, onPreview, onReload }) {
     stepLabel, roleNameForStep, firstApprovalLevel, paymentStep, paymentDocType, finalPurchaseStep,
     deliveryStep, finalPaymentStep, finalPaymentDocType, closureStep,
   } = useMeta();
-  const { showToast } = useToast();
   const confirm = useConfirm();
   const level = requisition.current_approval_level;
   const isSelectionStep = level === SELECTION_STEP;
@@ -960,6 +971,24 @@ function ApprovalPanel({ requisition, quotations, onPreview, onReload }) {
   const [feedback, setFeedback] = useState(null);
   const [commentsInvalid, setCommentsInvalid] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const resultDialogRef = useRef(null);
+
+  useEffect(() => {
+    if (!result) return;
+    const dialog = resultDialogRef.current;
+    if (!dialog || typeof dialog.showModal !== 'function') return;
+    requestAnimationFrame(() => {
+      dialog.showModal();
+      dialog.querySelector('#approval-result-accept')?.focus();
+    });
+  }, [result]);
+
+  const acknowledgeResult = () => {
+    resultDialogRef.current?.close();
+    setResult(null);
+    onReload();
+  };
 
   const opt = APPROVAL_OPTIONS[option] || APPROVAL_OPTIONS.approve;
 
@@ -1016,18 +1045,16 @@ function ApprovalPanel({ requisition, quotations, onPreview, onReload }) {
 
     setBusy(true);
     try {
-      let result;
+      let apiResult;
       if (option === 'approve') {
-        result = await API.approveRequisition(requisition.id, trimmedComments, finalSelectedQuotationId);
+        apiResult = await API.approveRequisition(requisition.id, trimmedComments, finalSelectedQuotationId);
       } else if (option === 'reject') {
-        result = await API.rejectRequisition(requisition.id, trimmedComments);
+        apiResult = await API.rejectRequisition(requisition.id, trimmedComments);
       } else {
-        result = await API.returnRequisition(requisition.id, option === 'return_start' ? 'start' : 'previous', trimmedComments);
+        apiResult = await API.returnRequisition(requisition.id, option === 'return_start' ? 'start' : 'previous', trimmedComments);
       }
-      const message = result.message || 'Acción registrada';
-      setFeedback({ type: 'success', message });
-      showToast(message, option === 'approve' ? 'success' : 'warning');
-      setTimeout(() => onReload(), 800);
+      const message = apiResult.message || 'Acción registrada';
+      setResult({ message, icon: opt.resultIcon, tone: opt.resultTone, title: opt.resultTitle });
     } catch (err) {
       setFeedback({ type: 'error', message: err.message || 'Error al registrar la acción' });
       setBusy(false);
@@ -1113,6 +1140,26 @@ function ApprovalPanel({ requisition, quotations, onPreview, onReload }) {
           </div>
         </>
       )}
+
+      <dialog
+        className={`approval-result-dialog approval-result-dialog--${result?.tone || 'success'}`}
+        aria-labelledby="approval-result-title"
+        ref={resultDialogRef}
+        onCancel={(e) => e.preventDefault()}
+      >
+        {result && (
+          <div className="approval-result-dialog__content">
+            <div className="approval-result-dialog__icon">{result.icon}</div>
+            <h3 className="approval-result-dialog__title" id="approval-result-title">{result.title}</h3>
+            <p className="modal__text">{result.message}</p>
+            <div className="modal__actions">
+              <button className="btn btn--primary" id="approval-result-accept" onClick={acknowledgeResult}>
+                Aceptar, continuar
+              </button>
+            </div>
+          </div>
+        )}
+      </dialog>
     </div>
   );
 }

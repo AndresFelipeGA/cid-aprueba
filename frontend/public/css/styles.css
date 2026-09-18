@@ -1585,8 +1585,16 @@ textarea.form__input {
   margin-top: 8px;
 }
 
-/* --- Confirmation Dialog (native <dialog>) --- */
+/* --- Confirmation Dialog (native <dialog>) ---
+   The app's global reset (`* { margin: 0 }`) zeroes out the UA stylesheet's
+   `margin: auto` that normally centers a modal <dialog>, so centering is
+   done explicitly here instead of relying on it. */
 .confirm-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
   border: none;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
@@ -1608,6 +1616,83 @@ textarea.form__input {
 
 .confirm-dialog .modal__actions {
   justify-content: flex-end;
+}
+
+/* --- Approval result dialog (blocks accidental double-clicks between steps) --- */
+.approval-result-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+  padding: 32px;
+  width: calc(100% - 32px);
+  max-width: 420px;
+  text-align: center;
+}
+
+.approval-result-dialog::backdrop {
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.approval-result-dialog__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: modal-scale-in 0.22s var(--ease);
+}
+
+.approval-result-dialog__icon {
+  font-size: 2.5rem;
+  line-height: 1;
+  margin-bottom: 12px;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: rgba(107, 142, 35, 0.12);
+}
+
+.approval-result-dialog--warning .approval-result-dialog__icon {
+  background-color: rgba(230, 168, 23, 0.16);
+}
+
+.approval-result-dialog--danger .approval-result-dialog__icon {
+  background-color: rgba(178, 34, 34, 0.1);
+}
+
+.approval-result-dialog__title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--color-accent);
+}
+
+.approval-result-dialog--warning .approval-result-dialog__title {
+  color: var(--color-warning-dark);
+}
+
+.approval-result-dialog--danger .approval-result-dialog__title {
+  color: var(--color-danger);
+}
+
+.approval-result-dialog .modal__text {
+  font-size: 0.95rem;
+  color: var(--color-text);
+  text-align: center;
+}
+
+.approval-result-dialog .modal__actions {
+  justify-content: center;
+  width: 100%;
 }
 
 /* --- Profile Page --- */
@@ -3268,11 +3353,13 @@ body,
 }
 
 [data-theme="dark"] .modal__content,
-[data-theme="dark"] .confirm-dialog {
+[data-theme="dark"] .confirm-dialog,
+[data-theme="dark"] .approval-result-dialog {
   border: 1px solid var(--color-border);
 }
 
-[data-theme="dark"] .confirm-dialog::backdrop {
+[data-theme="dark"] .confirm-dialog::backdrop,
+[data-theme="dark"] .approval-result-dialog::backdrop {
   background-color: rgba(0, 0, 0, 0.7);
 }
 
