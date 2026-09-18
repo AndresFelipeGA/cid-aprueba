@@ -46,7 +46,7 @@ router.post(
   [
     ...documentFields,
     body('project_id').optional({ values: 'falsy' }).isInt({ min: 1 }).withMessage('El ID del proyecto debe ser un número entero válido'),
-    body('budget_cap').isFloat({ min: 1 }).withMessage('El presupuesto máximo es requerido y debe ser mayor a cero').toFloat(),
+    body('budget_cap').isFloat({ min: 0 }).withMessage('El presupuesto máximo debe ser un número mayor o igual a cero').toFloat(),
   ],
   validate,
   asyncHandler(requisitionController.create),
@@ -70,6 +70,30 @@ router.post(
 
 // GET /api/requisitions/:id/download
 router.get('/:id/download', [idParam()], validate, asyncHandler(requisitionController.download));
+
+// GET /api/requisitions/:id/comparison-document/download
+router.get(
+  '/:id/comparison-document/download',
+  [idParam()],
+  validate,
+  asyncHandler(requisitionController.downloadComparisonDocument),
+);
+
+// GET /api/requisitions/:id/closure-listing/download
+router.get(
+  '/:id/closure-listing/download',
+  [idParam()],
+  validate,
+  asyncHandler(requisitionController.downloadClosureListing),
+);
+
+// GET /api/requisitions/:id/closure-minutes/download
+router.get(
+  '/:id/closure-minutes/download',
+  [idParam()],
+  validate,
+  asyncHandler(requisitionController.downloadClosureMinutes),
+);
 
 // GET /api/requisitions/:id/versions/:versionId/download
 router.get(

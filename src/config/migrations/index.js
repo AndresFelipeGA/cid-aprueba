@@ -22,6 +22,12 @@ const migrations = [
   require('./006_returns_amounts_numbering'),
   require('./007_payment_document'),
   require('./008_budget_cap'),
+  require('./009_quotation_payment_terms'),
+  require('./010_comparison_document'),
+  require('./011_quotation_date'),
+  require('./012_second_purchase_step'),
+  require('./013_drop_doc_type_check'),
+  require('./014_treasury_and_closure'),
 ];
 
 /**

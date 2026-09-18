@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../config/database');
 const AppError = require('../utils/AppError');
-const { CURRENCY, QUOTATION_DOC_TYPES, PAYMENT_DOC_TYPE } = require('../config/workflow');
+const { CURRENCY, QUOTATION_DOC_TYPES, PAYMENT_DOC_TYPE, FINAL_PAYMENT_DOC_TYPE } = require('../config/workflow');
 
 const MAX_QUOTATIONS = 3;
 const REQUIRED_DOC_TYPES = Object.keys(QUOTATION_DOC_TYPES);
@@ -62,7 +62,7 @@ const Quotation = {
     };
   },
 
-  create({ requisitionId, providerName, amount, currency = CURRENCY, notes, filePath, originalFilename, createdBy }) {
+  create({ requisitionId, providerName, amount, currency = CURRENCY, notes, advancePercent, quotationDate, filePath, originalFilename, createdBy }) {
     // Check max 3 quotations per requisition
     const count = Quotation.countByRequisition(requisitionId);
     if (count >= MAX_QUOTATIONS) {
@@ -70,9 +70,9 @@ const Quotation = {
     }
 
     const result = db.prepare(`
-      INSERT INTO quotations (requisition_id, provider_name, amount, currency, notes, file_path, original_filename, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(requisitionId, providerName, amount, currency, notes || null, filePath, originalFilename, createdBy);
+      INSERT INTO quotations (requisition_id, provider_name, amount, currency, notes, advance_percent, quotation_date, file_path, original_filename, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(requisitionId, providerName, amount, currency, notes || null, advancePercent ?? null, quotationDate ?? null, filePath, originalFilename, createdBy);
 
     return Quotation.findById(result.lastInsertRowid);
   },
@@ -198,6 +198,17 @@ const Quotation = {
       WHERE q.requisition_id = ? AND q.status = 'selected' AND qd.doc_type = ?
       LIMIT 1
     `).get(requisitionId, PAYMENT_DOC_TYPE);
+    return !!result;
+  },
+
+  /** Whether the selected quotation already has the final (balance) payment proof attached. */
+  hasFinalPaymentDocument(requisitionId) {
+    const result = db.prepare(`
+      SELECT qd.id FROM quotations q
+      JOIN quotation_documents qd ON qd.quotation_id = q.id
+      WHERE q.requisition_id = ? AND q.status = 'selected' AND qd.doc_type = ?
+      LIMIT 1
+    `).get(requisitionId, FINAL_PAYMENT_DOC_TYPE);
     return !!result;
   },
 };

@@ -1,6 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
 const quotationController = require('../controllers/quotationController');
+const requisitionController = require('../controllers/requisitionController');
 const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
 const validate = require('../middleware/validate');
@@ -9,14 +10,23 @@ const { idParam } = require('../middleware/validators');
 const { createUploader, fixUploadFilename } = require('../middleware/upload');
 const { requireQuotationStage, loadQuotation, loadDocument } = require('../middleware/quotationStage');
 const { requirePaymentStage } = require('../middleware/paymentStage');
-const { QUOTATION_DOC_TYPES } = require('../config/workflow');
+const { requireFinalPurchaseStage } = require('../middleware/finalPurchaseStage');
+const { requireDeliveryStage } = require('../middleware/deliveryStage');
+const { requireFinalPaymentStage } = require('../middleware/finalPaymentStage');
+const { requireClosureStage } = require('../middleware/closureStage');
+const {
+  QUOTATION_DOC_TYPES, OPTIONAL_QUOTATION_DOC_TYPES, FINAL_PURCHASE_DOC_TYPES, DELIVERY_DOC_TYPES,
+} = require('../config/workflow');
 
 const router = express.Router();
 const upload = createUploader('quotations');
 
-const DOC_TYPES = Object.keys(QUOTATION_DOC_TYPES);
+const DOC_TYPES = [...Object.keys(QUOTATION_DOC_TYPES), ...Object.keys(OPTIONAL_QUOTATION_DOC_TYPES)];
+const FINAL_PURCHASE_DOC_TYPE_KEYS = Object.keys(FINAL_PURCHASE_DOC_TYPES);
+const DELIVERY_DOC_TYPE_KEYS = Object.keys(DELIVERY_DOC_TYPES);
 const PURCHASING = 4; // Encargado/a de Compras
-const FINANCE = 5; // Área Financiera
+const TESORERIA = 6; // Tesorería
+const COORDINATOR = 1; // Coordinador/a de Territorio
 
 router.use(authenticate);
 
@@ -39,6 +49,12 @@ router.post(
     body('provider_name').trim().isLength({ min: 2, max: 255 })
       .withMessage('El nombre del proveedor debe tener entre 2 y 255 caracteres'),
     body('amount').isFloat({ min: 1 }).withMessage('El monto de la cotización es requerido y debe ser mayor a cero').toFloat(),
+    body('advance_percent').isFloat({ min: 0, max: 100 }).withMessage('El anticipo debe ser un porcentaje entre 0 y 100').toFloat(),
+    body('quotation_date')
+      .notEmpty().withMessage('La fecha de la cotización es requerida')
+      .isISO8601().withMessage('La fecha de la cotización no es válida')
+      .custom((value) => value.slice(0, 10) <= new Date().toISOString().slice(0, 10))
+      .withMessage('La fecha de la cotización no puede ser una fecha futura'),
     body('notes').optional({ values: 'falsy' }).trim().isLength({ max: 500 }).withMessage('Las notas deben tener máximo 500 caracteres'),
   ],
   validate,
@@ -87,10 +103,62 @@ router.delete(
   asyncHandler(quotationController.deleteDocument),
 );
 
-// POST /api/requisitions/:requisitionId/payment-document — Área Financiera adjunta el comprobante de pago
+// POST /api/requisitions/:requisitionId/comparison-document — Encargado/a de Compras adjunta el cuadro comparativo de cotizaciones
+router.post(
+  '/:requisitionId/comparison-document',
+  authorize(PURCHASING),
+  upload.single('file'),
+  fixUploadFilename,
+  [idParam('requisitionId')],
+  validate,
+  requireQuotationStage,
+  asyncHandler(quotationController.uploadComparisonDocument),
+);
+
+// DELETE /api/requisitions/:requisitionId/comparison-document
+router.delete(
+  '/:requisitionId/comparison-document',
+  authorize(PURCHASING),
+  [idParam('requisitionId')],
+  validate,
+  requireQuotationStage,
+  asyncHandler(quotationController.deleteComparisonDocument),
+);
+
+// POST /api/requisitions/:requisitionId/final-purchase-documents — Encargado/a de Compras (segunda aprobación)
+// adjunta documentos de cierre opcionales sobre la cotización ya seleccionada.
+router.post(
+  '/:requisitionId/final-purchase-documents',
+  authorize(PURCHASING),
+  upload.single('file'),
+  fixUploadFilename,
+  [
+    idParam('requisitionId'),
+    body('doc_type').trim().isIn(FINAL_PURCHASE_DOC_TYPE_KEYS)
+      .withMessage(`Tipo de documento inválido. Debe ser uno de: ${FINAL_PURCHASE_DOC_TYPE_KEYS.join(', ')}`),
+  ],
+  validate,
+  requireFinalPurchaseStage,
+  loadQuotation,
+  asyncHandler(quotationController.uploadDocument),
+);
+
+// DELETE /api/requisitions/:requisitionId/final-purchase-documents/:documentId
+router.delete(
+  '/:requisitionId/final-purchase-documents/:documentId',
+  authorize(PURCHASING),
+  [idParam('requisitionId'), idParam('documentId')],
+  validate,
+  requireFinalPurchaseStage,
+  loadQuotation,
+  loadDocument,
+  asyncHandler(quotationController.deleteDocument),
+);
+
+// POST /api/requisitions/:requisitionId/payment-document — Tesorería adjunta el comprobante del anticipo
 router.post(
   '/:requisitionId/payment-document',
-  authorize(FINANCE),
+  authorize(TESORERIA),
   upload.single('file'),
   fixUploadFilename,
   [idParam('requisitionId')],
@@ -103,13 +171,112 @@ router.post(
 // DELETE /api/requisitions/:requisitionId/payment-document/:documentId
 router.delete(
   '/:requisitionId/payment-document/:documentId',
-  authorize(FINANCE),
+  authorize(TESORERIA),
   [idParam('requisitionId'), idParam('documentId')],
   validate,
   requirePaymentStage,
   loadQuotation,
   loadDocument,
   asyncHandler(quotationController.deleteDocument),
+);
+
+// POST /api/requisitions/:requisitionId/delivery-documents — Encargado/a de Compras adjunta documentos
+// opcionales de entrega (factura, cuenta de cobro, acta de entrega) sobre la cotización seleccionada.
+router.post(
+  '/:requisitionId/delivery-documents',
+  authorize(PURCHASING),
+  upload.single('file'),
+  fixUploadFilename,
+  [
+    idParam('requisitionId'),
+    body('doc_type').trim().isIn(DELIVERY_DOC_TYPE_KEYS)
+      .withMessage(`Tipo de documento inválido. Debe ser uno de: ${DELIVERY_DOC_TYPE_KEYS.join(', ')}`),
+  ],
+  validate,
+  requireDeliveryStage,
+  loadQuotation,
+  asyncHandler(quotationController.uploadDocument),
+);
+
+// DELETE /api/requisitions/:requisitionId/delivery-documents/:documentId
+router.delete(
+  '/:requisitionId/delivery-documents/:documentId',
+  authorize(PURCHASING),
+  [idParam('requisitionId'), idParam('documentId')],
+  validate,
+  requireDeliveryStage,
+  loadQuotation,
+  loadDocument,
+  asyncHandler(quotationController.deleteDocument),
+);
+
+// POST /api/requisitions/:requisitionId/final-payment-document — Tesorería adjunta el comprobante del saldo final
+router.post(
+  '/:requisitionId/final-payment-document',
+  authorize(TESORERIA),
+  upload.single('file'),
+  fixUploadFilename,
+  [idParam('requisitionId')],
+  validate,
+  requireFinalPaymentStage,
+  loadQuotation,
+  asyncHandler(quotationController.uploadFinalPaymentDocument),
+);
+
+// DELETE /api/requisitions/:requisitionId/final-payment-document/:documentId
+router.delete(
+  '/:requisitionId/final-payment-document/:documentId',
+  authorize(TESORERIA),
+  [idParam('requisitionId'), idParam('documentId')],
+  validate,
+  requireFinalPaymentStage,
+  loadQuotation,
+  loadDocument,
+  asyncHandler(quotationController.deleteDocument),
+);
+
+// POST /api/requisitions/:requisitionId/closure-listing — Coordinador/a de Territorio adjunta el listado de cierre
+router.post(
+  '/:requisitionId/closure-listing',
+  authorize(COORDINATOR),
+  upload.single('file'),
+  fixUploadFilename,
+  [idParam('requisitionId')],
+  validate,
+  requireClosureStage,
+  asyncHandler(requisitionController.uploadClosureListing),
+);
+
+// DELETE /api/requisitions/:requisitionId/closure-listing
+router.delete(
+  '/:requisitionId/closure-listing',
+  authorize(COORDINATOR),
+  [idParam('requisitionId')],
+  validate,
+  requireClosureStage,
+  asyncHandler(requisitionController.deleteClosureListing),
+);
+
+// POST /api/requisitions/:requisitionId/closure-minutes — Coordinador/a de Territorio adjunta el acta de cierre
+router.post(
+  '/:requisitionId/closure-minutes',
+  authorize(COORDINATOR),
+  upload.single('file'),
+  fixUploadFilename,
+  [idParam('requisitionId')],
+  validate,
+  requireClosureStage,
+  asyncHandler(requisitionController.uploadClosureMinutes),
+);
+
+// DELETE /api/requisitions/:requisitionId/closure-minutes
+router.delete(
+  '/:requisitionId/closure-minutes',
+  authorize(COORDINATOR),
+  [idParam('requisitionId')],
+  validate,
+  requireClosureStage,
+  asyncHandler(requisitionController.deleteClosureMinutes),
 );
 
 // GET /api/requisitions/:requisitionId/quotations/:quotationId/download

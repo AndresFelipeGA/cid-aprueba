@@ -31,7 +31,7 @@ const USERS = {
   legal: 'rep.legal',           // role 3
   compras: 'enc.compras',       // role 4
   financiera: 'area.financiera', // role 5 (renamed in migration 003)
-  revisor: 'area.compras',       // role 6 (created in migration 003)
+  revisor: 'tesoreria',          // role 6 (created in migration 003, renamed in migration 014)
 };
 
 /** Minimal valid PDF payload for multipart uploads. */

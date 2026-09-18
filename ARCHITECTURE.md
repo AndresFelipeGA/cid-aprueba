@@ -6,7 +6,7 @@
 
 ## 1. System Overview
 
-**CID Aprueba** is a web application that manages sequential, role-based approval of project quotations and proposals. Requisitions uploaded by users must pass through a chain of **7 sequential approval steps** (mapped to **6 role levels**) before reaching full approval status. Each step can only act on a requisition once the previous step has been approved. Note that role level 3 (Representante Legal) participates at two different steps (3 and 5).
+**CID Aprueba** is a web application that manages sequential, role-based approval of project quotations and proposals. Requisitions uploaded by users must pass through a chain of **12 sequential approval steps** (mapped to **6 role levels**) before reaching full approval status. Each step can only act on a requisition once the previous step has been approved. Role level 3 (Representante Legal) participates at two different steps (3 and 5); role level 4 (Encargado/a de Compras) participates at **four** steps (4, 6, 9, 10) plus half of the joint closing step (12). The final step, 12, is a **joint approval**: role level 1 (Coordinador/a de Territorio) and role level 4 (Encargado/a de Compras) must each approve independently — in either order — before the requisition closes.
 
 ### Core Workflow
 
@@ -17,18 +17,24 @@ stateDiagram-v2
     Step3_Review --> Step4_Review: Step 3 approves
     Step4_Review --> Step5_Review: Step 4 approves (priced quotations attached)
     Step5_Review --> Step6_Review: Step 5 approves (quotation selected)
-    Step6_Review --> Step7_Review: Step 6 approves
-    Step7_Review --> Approved: Step 7 approves
+    Step6_Review --> Step7_Review: Step 6 approves (optional purchase-closing documents)
+    Step7_Review --> Step8_Review: Step 7 approves (Área Financiera — review only)
+    Step8_Review --> Step9_Review: Step 8 approves (Tesorería attaches advance payment proof)
+    Step9_Review --> Step10_Review: Step 9 approves (Encargado/a de Compras confirms the advance)
+    Step10_Review --> Step11_Review: Step 10 approves (optional delivery documents)
+    Step11_Review --> Step12_Closure: Step 11 approves (Tesorería attaches final payment proof)
+    Step12_Closure --> Approved: BOTH Coordinador/a de Territorio AND Encargado/a de Compras approve their half (either order)
     Step2_Review --> Returned_N: any step N≥2 returns "previous" (status returned, level N-1)
     Returned_N --> Step2_Review: approver at N-1 re-approves
     Step2_Review --> Returned_Start: any step returns "start" (level 1, awaits new version)
     Returned_Start --> Step2_Review: coordinator resubmits (version+1, steps reset)
     Step2_Review --> Rejected: any step rejects definitively (terminal)
+    Step12_Closure --> Step11_Review: either party returns "previous" from step 12 (voids both halves)
     Rejected --> [*]
     Approved --> [*]
 ```
 
-Returns and terminal rejections are available from every step 2–7; the diagram shows them once for brevity.
+Returns and terminal rejections are available from every step 2–12; the diagram shows them once for brevity. Returning from step 12 (by either the Coordinador/a or the Encargado/a de Compras) voids **both** recorded halves of the joint approval, not just the returning party's own.
 
 ### Key Principles
 
@@ -45,7 +51,7 @@ Returns and terminal rejections are available from every step 2–7; the diagram
 | **Runtime** | Node.js 20+ | Fast startup, large ecosystem, single-language stack |
 | **Framework** | Express 4.x | Minimal, well-understood, flexible routing and middleware |
 | **Database** | SQLite via `sql.js` (persistent) | Pure-JS SQLite (no native build), synchronous API wrapper mimics `better-sqlite3`, persistent storage at `data/cid_aprueba.db` with auto-save and atomic writes |
-| **Frontend** | Vanilla HTML / CSS / JS | No build step, instant reload, minimal dependencies, easy to maintain |
+| **Frontend** | React 18 + React Router (built with Vite) | Component-based UI, hooks/context for state, industry-standard tooling that scales to larger teams/projects |
 | **Auth** | JWT (`jsonwebtoken` + `bcrypt`) | Stateless authentication, simple role claims in token payload |
 | **File uploads** | `multer` | Battle-tested multipart handling for Express |
 | **Validation** | `express-validator` | Declarative input validation tied to routes |
@@ -53,7 +59,7 @@ Returns and terminal rejections are available from every step 2–7; the diagram
 
 ### Why This Stack?
 
-The project prioritizes **speed of development**, **operational simplicity**, and **minimal infrastructure**. SQLite via sql.js eliminates the need for a separate database server and avoids native compilation dependencies. The database file persists across restarts at `data/cid_aprueba.db` with automatic saves and atomic writes. Vanilla frontend avoids build tooling. The entire application can run on a single server with `node server.js`.
+The project prioritizes **speed of development**, **operational simplicity**, and **minimal infrastructure**. SQLite via sql.js eliminates the need for a separate database server and avoids native compilation dependencies. The database file persists across restarts at `data/cid_aprueba.db` with automatic saves and atomic writes. The React frontend is built once with Vite into static files (`public/`); the running application is still a single server (`node server.js`) with no separate frontend process.
 
 ---
 
@@ -77,7 +83,8 @@ cid-aprueba/
 │   │       ├── index.js       # Migration runner
 │   │       ├── 001_initial_schema.js  # Initial 6-table schema
 │   │       ├── 002_seed_users.js      # Default user seeding
-│   │       └── 004_projects.js        # Projects table and requisitions.project_id
+│   │       ├── 004_projects.js        # Projects table and requisitions.project_id
+│   │       └── 014_treasury_and_closure.js  # Extends the workflow to 12 steps: renames role 6 to Tesorería (and the seeded user area.compras → tesoreria), adds the delivery/final-payment/closure columns
 │   │
 │   ├── middleware/
 │   │   ├── authenticate.js    # JWT verification middleware
@@ -119,15 +126,22 @@ cid-aprueba/
 │       ├── AppError.js        # Custom error class
 │       └── logger.js          # Logging utility
 │
-├── public/                    # Static frontend assets
-│   ├── index.html             # Single-page app (login + main views)
-│   ├── css/
-│   │   └── styles.css         # Global styles with CID brand colors
-│   ├── js/
-│   │   ├── api.js             # Fetch wrapper with JWT handling
-│   │   └── app.js             # Main application logic (SPA routing, views)
-│   └── assets/
-│       └── logo-LA-CID.svg    # CID logo
+├── frontend/                   # React source (built with Vite)
+│   ├── index.html              # Vite entry HTML
+│   ├── vite.config.js          # Builds into ../public; dev server proxies /api to :3000
+│   ├── public/                 # Static passthrough (copied as-is into the build output)
+│   │   ├── assets/              # Logos, favicon, login background
+│   │   └── css/styles.css       # Global stylesheet with CID brand colors (unbundled, linked directly)
+│   └── src/
+│       ├── main.jsx             # React root
+│       ├── App.jsx              # Providers + HashRouter + route table
+│       ├── api.js               # Fetch wrapper with JWT handling
+│       ├── context/             # Auth, Meta, Toast, Confirm, DocumentModal, Badge, PageTitle
+│       ├── components/          # Sidebar, Header, modals, FilterableTable, etc.
+│       ├── views/               # Dashboard, Requisitions, RequisitionDetail, Acta, CreateRequisition, Profile, Users
+│       └── utils/format.js      # Date/currency/bytes formatting helpers
+│
+├── public/                     # Generated by `npm run build` (gitignored) — served statically by Express
 │
 ├── uploads/                   # Uploaded document files (gitignored)
 │
@@ -228,7 +242,7 @@ erDiagram
 | `username` | TEXT | UNIQUE, NOT NULL | Login username |
 | `email` | TEXT | UNIQUE, NOT NULL | User email |
 | `password_hash` | TEXT | NOT NULL | bcrypt-hashed password |
-| `role_level` | INTEGER | NOT NULL, CHECK 1-6 | 1 = Coordinador/a de Territorio, 2 = Director/a Programática, 3 = Representante Legal, 4 = Encargado/a de Compras, 5 = Área Financiera, 6 = Área de Compras |
+| `role_level` | INTEGER | NOT NULL, CHECK 1-6 | 1 = Coordinador/a de Territorio, 2 = Director/a Programática, 3 = Representante Legal, 4 = Encargado/a de Compras, 5 = Área Financiera, 6 = Tesorería |
 | `full_name` | TEXT | NOT NULL | Display name |
 | `is_active` | INTEGER | DEFAULT 1 | Soft-delete flag |
 | `created_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
@@ -266,10 +280,14 @@ erDiagram
 | `uploaded_by` | INTEGER | FK → users.id | Uploader user ID |
 | `project_id` | INTEGER | FK → projects.id, NULL | Associated project (optional) |
 | `status` | TEXT | NOT NULL | `in_review`, `returned`, `approved`, `rejected` (`pending` legacy only) |
-| `current_approval_level` | INTEGER | DEFAULT 2 | Step currently being reviewed (2–7); 1 = returned to start awaiting a new version; 8 = fully approved |
+| `current_approval_level` | INTEGER | DEFAULT 2 | Step currently being reviewed (2–12); 1 = returned to start awaiting a new version; 13 (`> MAX_STEP_LEVEL`) = fully approved |
 | `selected_quotation_id` | INTEGER | FK → quotations.id, NULL | The quotation selected by the Representante Legal at step 5 |
+| `final_compras_approved_at` | TEXT | NULL | Timestamp of the Encargado/a de Compras' half of the joint step 12 approval; set via `Requisition.setFinalApproval(id, 'compras')` |
+| `final_coordinador_approved_at` | TEXT | NULL | Timestamp of the Coordinador/a de Territorio's half of the joint step 12 approval; set via `Requisition.setFinalApproval(id, 'coordinador')` |
 | `created_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 | `updated_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
+
+Added by migration [`014_treasury_and_closure.js`](src/config/migrations/014_treasury_and_closure.js): `final_compras_approved_at`, `final_coordinador_approved_at`, plus the delivery/closure document columns referenced below (`closure_listing_file_path`, `closure_listing_original_filename`, `closure_minutes_file_path`, `closure_minutes_original_filename`). Step 12 (and the requisition's `status`) only flips to `approved` once **both** timestamp columns are set — see `Requisition.setFinalApproval` / `clearFinalApprovals` and `approvalController.approveClosure`.
 
 #### `approval_steps`
 
@@ -277,13 +295,13 @@ erDiagram
 |--------|------|-------------|-------------|
 | `id` | INTEGER | PK, AUTOINCREMENT | |
 | `requisition_id` | INTEGER | FK → requisitions.id | |
-| `step_level` | INTEGER | NOT NULL, 1-7 | Which step this represents in the 7-step workflow |
+| `step_level` | INTEGER | NOT NULL, 1-12 | Which step this represents in the 12-step workflow |
 | `status` | TEXT | DEFAULT `pending` | `pending`, `approved`, `rejected` |
-| `assigned_role_level` | INTEGER | NOT NULL | Role level required to act |
+| `assigned_role_level` | INTEGER | NOT NULL | Role level required to act (for the joint closure step, 12, this stores the primary role — see `primaryRoleForStep`; actual authorization checks use `rolesForStep`, which returns both roles) |
 | `created_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 | `updated_at` | TEXT | DEFAULT CURRENT_TIMESTAMP | |
 
-**Note:** When a requisition is radicada, 7 `approval_steps` rows are created: step 1 `approved` (the upload is the radicación), steps 2–7 `pending`. `assigned_role_level` comes from `STEP_TO_ROLE_MAP` in [`config/workflow.js`](src/config/workflow.js). A return resets steps ≥ target back to `pending`.
+**Note:** When a requisition is radicada, 12 `approval_steps` rows are created: step 1 `approved` (the upload is the radicación), steps 2–12 `pending`. `assigned_role_level` comes from `STEP_TO_ROLE_MAP` in [`config/workflow.js`](src/config/workflow.js), read through the `rolesForStep`/`primaryRoleForStep` helpers rather than indexed directly (step 12 maps to an array, `[1, 4]`). A return resets steps ≥ target back to `pending`; a return from the joint step 12 also clears both `final_*_approved_at` columns on the requisition (`Requisition.clearFinalApprovals`).
 
 #### `requisition_versions`
 
@@ -361,6 +379,7 @@ Migration files live in [`src/config/migrations/`](src/config/migrations/) and a
 | [`001_initial_schema.js`](src/config/migrations/001_initial_schema.js) | 1 | Creates the 6 core tables (users, requisitions, approval_steps, approval_logs, quotations, quotation_documents) |
 | [`002_seed_users.js`](src/config/migrations/002_seed_users.js) | 2 | Seeds 7 default users (only if users table is empty) |
 | [`004_projects.js`](src/config/migrations/004_projects.js) | 4 | Creates the `projects` table and adds `project_id` column to `requisitions` |
+| [`014_treasury_and_closure.js`](src/config/migrations/014_treasury_and_closure.js) | 14 | Extends the workflow from 8 to 12 steps: renames role 6 from "Área de Compras" to "Tesorería" (and the seeded `area.compras` user to `tesoreria`); adds delivery-document, final-payment, and closure-document columns plus the two `final_*_approved_at` joint-approval timestamps on `requisitions` |
 
 ### Data Persistence & Safety
 
@@ -487,7 +506,7 @@ sequenceDiagram
 | **View dashboard metrics** | All authenticated users |
 | **View requisition list** | Filtered by `Requisition.findAll` / `findByStatus`: a requisition is visible once `current_approval_level` ≥ the lowest step assigned to the user's role, or once it is `approved`/`rejected` |
 | **Open requisition detail / download / history / quotations** | Same visibility rule, enforced by `loadVisibleRequisition` in `requisitionController.js` (403 otherwise) |
-| **Approve/Reject** | `STEP_TO_ROLE_MAP[current_approval_level]` must equal the user's role_level (role 3 acts at steps 3 and 5) |
+| **Approve/Reject** | The user's role_level must be included in `rolesForStep(current_approval_level)` (role 3 acts at steps 3 and 5; role 4 acts at steps 4, 6, 9, 10 and — jointly with role 1 — step 12) |
 | **Upload requisition** | Coordinadores de Territorio (role_level = 1) only |
 | **Manage users** | Representante Legal (role_level = 3) only — see Section 7.1 |
 
@@ -512,62 +531,81 @@ The frontend shows a **"Gestión de Usuarios"** tab in the navigation only when 
 
 ### Role Levels vs. Workflow Steps
 
-The system uses **6 role levels** but **7 workflow steps**. Role level 3 (Representante Legal) participates at two different steps. The mapping is defined in [`STEP_TO_ROLE_MAP`](src/models/ApprovalStep.js:8):
+The system uses **6 role levels** but **12 workflow steps**. Role level 3 (Representante Legal) participates at two steps (3 and 5); role level 4 (Encargado/a de Compras) participates at **four** steps (4, 6, 9, 10) plus half of the joint closing step (12); role level 1 (Coordinador/a de Territorio) participates at step 1 plus the other half of step 12. Step 12 is the only step with two owners — it maps to an **array** of roles rather than a single one. The mapping is defined in [`STEP_TO_ROLE_MAP`](src/config/workflow.js), and should always be read through the `rolesForStep(step)` (always returns an array) / `primaryRoleForStep(step)` (first/scalar) helpers rather than indexed directly, so callers don't have to special-case step 12:
 
 ```javascript
 const STEP_TO_ROLE_MAP = {
-  1: 1, // Coordinador/a de Territorio
-  2: 2, // Director/a Programática
-  3: 3, // Representante Legal (primera vez)
-  4: 4, // Encargado/a de Compras
-  5: 3, // Representante Legal (segunda vez — selecciona cotización)
-  6: 5, // Área Financiera
-  7: 6, // Área de Compras
+  1: 1,       // Coordinador/a de Territorio (radica)
+  2: 2,       // Director/a Programática
+  3: 3,       // Representante Legal (primera revisión)
+  4: 4,       // Encargado/a de Compras (gestión de cotizaciones)
+  5: 3,       // Representante Legal (selecciona cotización)
+  6: 4,       // Encargado/a de Compras (segunda aprobación — documentos de cierre de compra)
+  7: 5,       // Área Financiera (solo revisa y aprueba — no adjunta nada)
+  8: 6,       // Tesorería (adjunta el comprobante del anticipo y aprueba)
+  9: 4,       // Encargado/a de Compras (confirma el anticipo)
+  10: 4,      // Encargado/a de Compras (adjunta documentos de entrega y aprueba)
+  11: 6,      // Tesorería (adjunta el comprobante del pago final y aprueba)
+  12: [1, 4], // Coordinador/a de Territorio Y Encargado/a de Compras, de forma conjunta
 };
 ```
 
 | Role Level | Role Name | Participates at Step(s) |
 |------------|-----------|------------------------|
-| 1 | Coordinador/a de Territorio | Step 1 |
+| 1 | Coordinador/a de Territorio | Step 1, and jointly at Step 12 |
 | 2 | Director/a Programática | Step 2 |
 | 3 | Representante Legal | Step 3 AND Step 5 |
-| 4 | Encargado/a de Compras | Step 4 |
-| 5 | Área Financiera | Step 6 |
-| 6 | Área de Compras | Step 7 |
+| 4 | Encargado/a de Compras | Steps 4, 6, 9, 10, and jointly at Step 12 |
+| 5 | Área Financiera | Step 7 (review/approve only — never uploads a document) |
+| 6 | Tesorería | Steps 8 AND 11 (renamed from "Área de Compras"; the migration also renames the seeded user `area.compras` → `tesoreria`) |
 
 ### Requisition Status Transitions
 
 ```
-IN_REVIEW (step 2) → … → IN_REVIEW (step 7) → APPROVED
+IN_REVIEW (step 2) → … → IN_REVIEW (step 12, joint) → APPROVED
      ↕ RETURNED (level N-1: previous approver re-approves)
      ↕ RETURNED (level 1: coordinator resubmits a new version)
+     ↕ RETURNED (from step 12: voids BOTH recorded halves of the joint approval)
      ↘ REJECTED (terminal)
 ```
 
 `pending` is kept in the CHECK constraint for legacy rows only; new requisitions are never created in that state.
 
-### 7-Step Approval Flow
+### 12-Step Approval Flow
 
-| Step | Role | Action |
-|------|------|--------|
-| 1 | Coordinador/a de Territorio | Radicación: the upload itself completes this step (no approval action) |
-| 2 | Director/a Programática | Review + approve |
-| 3 | Representante Legal | Review + approve (first time) |
-| 4 | Encargado/a de Compras | Upload 1–3 quotations with supporting docs + approve |
-| 5 | Representante Legal | Review quotations, **select one**, approve (second time) |
-| 6 | Área Financiera | Review + approve |
-| 7 | Área de Compras | Final approval |
+| Step | Role | Action | Uploads |
+|------|------|--------|---------|
+| 1 | Coordinador/a de Territorio | Radicación: the upload itself completes this step (no approval action) | The requisition document itself |
+| 2 | Director/a Programática | Review + approve | — |
+| 3 | Representante Legal | Review + approve (first time) | — |
+| 4 | Encargado/a de Compras | Manage 1–3 quotations, each with 3 **mandatory** supporting docs (RUT, Cámara de Comercio, Cédula) + approve | Quotations + mandatory provider docs; comparative table mandatory only if >1 quotation |
+| 5 | Representante Legal | Review quotations, **select one**, approve (second time) | — |
+| 6 | Encargado/a de Compras | Second approval; closes out the purchase with the selected provider | Up to 6 **optional** closing documents (orden de compra, póliza, contrato, factura, cuenta de cobro, certificado bancario) — none required |
+| 7 | Área Financiera | Review + approve only — no upload capability at this step | — |
+| 8 | Tesorería | Attaches the advance payment proof and approves | `comprobante_pago` — **mandatory** before approving |
+| 9 | Encargado/a de Compras | Confirms the advance was received/applied and approves | — (no upload, just approves) |
+| 10 | Encargado/a de Compras | Approves delivery | Up to 3 **optional** delivery documents (factura final, cuenta de cobro final, acta de entrega) — none required |
+| 11 | Tesorería | Attaches the final/balance payment proof and approves | `comprobante_pago_saldo` — **mandatory** before approving |
+| 12 | Coordinador/a de Territorio AND Encargado/a de Compras (joint) | Each approves independently, in either order; requisition only closes once both halves are recorded | Coordinador/a attaches up to 2 optional closing documents (Listados, Actas) — **at least one of the two** is required before the Coordinador/a can approve their half; Encargado/a de Compras has no upload at this step |
 
 ### Per-Step Logic
 
-1. Coordinator radica (uploads) → one transaction creates the row with `number = REQ-<year>-<seq>`, `version = 1`, `status = 'in_review'`, `current_approval_level = FIRST_APPROVAL_LEVEL (2)`; the 7 `approval_steps` (step 1 `approved`, 2–7 `pending`); version 1 in `requisition_versions`; and an `approval_logs` entry `uploaded`.
-2. Steps 2–7 are approved by the role in `STEP_TO_ROLE_MAP`, with special behavior:
-   - **Step 4 (Encargado/a de Compras):** attaches 1–3 quotations, each with a mandatory `amount` (COP) and the 4 supporting documents; at least one complete quotation is required to approve
-   - **Step 5 (Representante Legal):** selects one quotation (`requisitions.selected_quotation_id`); auto-selected when only one exists
-3. Approving step 7 → `status = 'approved'`, `current_approval_level = 8`
+1. Coordinator radica (uploads) → one transaction creates the row with `number = REQ-<year>-<seq>`, `version = 1`, `status = 'in_review'`, `current_approval_level = FIRST_APPROVAL_LEVEL (2)`; the 12 `approval_steps` (step 1 `approved`, 2–12 `pending`); version 1 in `requisition_versions`; and an `approval_logs` entry `uploaded`.
+2. Steps 2–12 are approved by the role(s) returned by `rolesForStep(step)`, with special behavior:
+   - **Step 4 (Encargado/a de Compras):** attaches 1–3 quotations, each with a mandatory `amount` (COP) and 3 supporting documents (RUT, Cámara de Comercio, Cédula); at least one complete quotation is required to approve (`Quotation.hasCompleteQuotation`). A comparative table document (`comparison_file_path` on the requisition) is required only once there's more than one quotation.
+   - **Step 5 (Representante Legal):** selects one quotation (`requisitions.selected_quotation_id`); auto-selected when only one exists.
+   - **Step 6 (Encargado/a de Compras, second approval):** may attach any of 6 optional closing documents to the selected quotation — none block approval.
+   - **Step 7 (Área Financiera):** review-and-approve only; this role never uploads a document anywhere in the workflow.
+   - **Step 8 (Tesorería, `PAYMENT_STEP`):** must attach the advance payment proof (`PAYMENT_DOC_TYPE = 'comprobante_pago'`) before approving — enforced via `Quotation.hasPaymentDocument`, guarded server-side by [`paymentStage.js`](src/middleware/paymentStage.js).
+   - **Step 9 (Encargado/a de Compras):** confirms the advance; no upload, just approves.
+   - **Step 10 (Encargado/a de Compras, `DELIVERY_STEP`):** may attach any of 3 optional delivery documents (`DELIVERY_DOC_TYPES`: factura_final, cuenta_cobro_final, acta_entrega) — none required; guarded by [`deliveryStage.js`](src/middleware/deliveryStage.js).
+   - **Step 11 (Tesorería, `FINAL_PAYMENT_STEP`):** must attach the final/balance payment proof (`FINAL_PAYMENT_DOC_TYPE = 'comprobante_pago_saldo'`) before approving — enforced via `Quotation.hasFinalPaymentDocument`, guarded by [`finalPaymentStage.js`](src/middleware/finalPaymentStage.js).
+   - **Step 12 (`CLOSURE_STEP`, joint — [`closureStage.js`](src/middleware/closureStage.js)):** handled separately from the single-owner steps by `approvalController.approveClosure`. Either `CLOSURE_ROLES` member (`[1, 4]`) may act while their own half is unset. The Coordinador/a de Territorio must have attached at least one of the two optional closure documents (`CLOSURE_DOC_LABELS`: listing="Listados", minutes="Actas") before approving their half. Each approval calls `Requisition.setFinalApproval(id, who)`, setting `final_compras_approved_at` or `final_coordinador_approved_at`. Only once **both** columns are set does the `approval_steps` row flip to `approved` and the requisition's `status` become `'approved'` (`current_approval_level = CLOSURE_STEP + 1`); until then it stays `in_review` at level 12 with a message that the other role's half is still pending.
+3. Approving step 12 (both halves recorded) → `status = 'approved'`, `current_approval_level = 13` (`> MAX_STEP_LEVEL`).
 4. **Return** (`POST /return`, comments required) from step N:
    - `to: 'previous'` → `current_approval_level = N-1`; `to: 'start'` → `1`. From step 2 both land on 1.
    - Steps ≥ target reset to `pending`; if target ≤ 5 the quotation selection is cleared (quotations themselves are kept for rework)
+   - Returning from the joint closure step (N = 12) also calls `Requisition.clearFinalApprovals`, voiding **both** recorded halves — even the one belonging to the party that didn't return it — so the requisition can't skip straight back to "approved" once step 11 is re-approved.
    - `status = 'returned'`, `return_reason`, `returned_from_level` set; log entry `returned` with `to_level`
    - Target ≥ 2: that step's approver re-approves normally (status goes back to `in_review`, reason cleared)
    - Target 1: only the original uploader (or a coordinator of the same territory) may `POST /resubmit` with a new file → `version + 1`, new `requisition_versions` row, steps reset (step 1 approved), level 2, log `resubmitted`
@@ -593,6 +631,8 @@ When the Representante Legal selects a quotation:
 
 Reviewers have three outcomes besides approving: return to the previous step (that approver reformulates and re-approves), return to the start (the coordinator radica a new version of the document, keeping the same number and full history), or reject definitively (terminal). Every version is kept in `requisition_versions` and downloadable.
 
+At the joint closure step (12), a return from **either** the Coordinador/a de Territorio or the Encargado/a de Compras voids **both** halves of the joint approval (`Requisition.clearFinalApprovals`), not just the returning party's own half — so once the requisition works its way back to step 12, both roles must approve again from scratch, even the one that never returned it.
+
 ### Visibility rule
 
 A user sees a requisition once it has reached the lowest step their role owns, once it is approved/rejected, **or if they have acted on it** (so the reviewer who returned it keeps seeing it while it sits at an earlier step). Implemented once in `Requisition.visibilityClause` / `isVisibleTo` and reused by lists, detail, downloads, history and both CSV exports.
@@ -613,7 +653,7 @@ The system seeds 7 default users (via [`002_seed_users.js`](src/config/migration
 | `rep.legal` | 3 | Representante Legal | — |
 | `enc.compras` | 4 | Encargado/a de Compras | — |
 | `area.financiera` | 5 | Área Financiera | — |
-| `area.compras` | 6 | Área de Compras | — |
+| `tesoreria` | 6 | Tesorería | — |
 
 All seed users share the default password `cid2024`.
 
@@ -621,15 +661,44 @@ All seed users share the default password `cid2024`.
 
 ## 8. Frontend Architecture
 
-The frontend is a set of static HTML pages served from `/public`. JavaScript modules handle API communication and DOM manipulation.
+The frontend is a React 18 single-page app, built with Vite from `frontend/` into static files served from `/public` (same `express.static` setup as before — no server-side routing changes). Routing uses `react-router-dom`'s `HashRouter`, keeping the same `#/dashboard`, `#/requisitions/:id`, etc. URLs as before so bookmarks and deep links are unaffected.
 
-### Page Structure
+### View Structure
 
-| Page | Purpose |
-|------|---------|
-| `index.html` | Single-page app: login, dashboard, requisition list, detail, create, profile, users (Gestión de Usuarios) |
+| View (`frontend/src/views/`) | Route | Purpose |
+|------|-------|---------|
+| `Dashboard.jsx` | `#/dashboard` | Stats, status/step charts, pending list, recent activity |
+| `Requisitions.jsx` | `#/requisitions` | Filterable/sortable list, CSV/PDF export |
+| `RequisitionDetail.jsx` | `#/requisitions/:id` | Approval panel, quotations, versions, timeline |
+| `Acta.jsx` | `#/requisitions/:id/acta` | Printable approval record |
+| `CreateRequisition.jsx` | `#/create` | Radicar requisición + inline project creation |
+| `Profile.jsx` | `#/profile` | Self-service profile edit |
+| `Users.jsx` | `#/users` | User management (Representante Legal only) |
 
-> **Nota:** El formulario "Crear Requisición" ahora incluye un selector de proyecto con opción de creación en línea (popup) para asociar una requisición a un proyecto existente o nuevo.
+### State & Cross-Cutting Concerns
+
+State lives in React Context providers (`frontend/src/context/`), each mirroring a former vanilla module 1:1:
+
+| Context | Replaces | Responsibility |
+|---------|----------|-----------------|
+| `AuthContext` | `state.js` (user) | Current user, login/logout, session-expiry handling |
+| `MetaContext` | `meta.js` | `/api/meta` workflow constants + label/lookup helpers |
+| `ToastContext` | `ui/toast.js` | Toast notifications |
+| `ConfirmContext` | `ui/modal.js` (confirm dialog) | Native `<dialog>` confirmation, promise-based |
+| `DocumentModalContext` | `ui/modal.js` (document preview) | Blob-based PDF/image preview modal |
+| `BadgeContext` | `badges.js` | Sidebar pending-count polling |
+| `PageTitleContext` | `router.js` (`setHeaderTitle`) | Header title, set per-view via `usePageTitle()` |
+
+`FilterableTable` (`components/FilterableTable.jsx`) is the reusable search/filter/table component used by both `Requisitions` and `Users`, replacing `ui/table.js`.
+
+> **Nota:** El formulario "Crear Requisición" incluye un selector de proyecto con opción de creación en línea (popup) para asociar una requisición a un proyecto existente o nuevo.
+
+### Build & Local Development
+
+```bash
+npm run dev:client   # Vite dev server (hot reload), proxies /api to :3000 — run `node server.js` alongside it
+npm run build         # Builds frontend/ into public/ (required before `npm start` in production)
+```
 
 ### Brand Design Tokens
 
@@ -645,9 +714,9 @@ The frontend is a set of static HTML pages served from `/public`. JavaScript mod
 ### Client-Side Auth
 
 - JWT stored in `localStorage`
-- [`api.js`](public/js/api.js) wraps `fetch()` to auto-attach `Authorization` header
-- On 401 response, redirect to login page
-- Role level stored client-side to conditionally render approve/reject buttons
+- [`api.js`](frontend/src/api.js) wraps `fetch()` to auto-attach `Authorization` header
+- On 401 response, dispatch an `auth:expired` event; `AuthProvider` clears the user and returns to the login view
+- Role level held in `AuthContext`, used to conditionally render approve/reject buttons and role-restricted views/nav links
 
 ---
 
@@ -655,8 +724,8 @@ The frontend is a set of static HTML pages served from `/public`. JavaScript mod
 
 | Concern | Approach |
 |---------|----------|
-| **More approval steps** | Add entries to `STEP_TO_ROLE_MAP` in [`ApprovalStep.js`](src/models/ApprovalStep.js:8) and update `MAX_STEP_LEVEL`; the step→role mapping is configurable, not hardcoded |
-| **Multiple approvers per level** | Add `assigned_user_id` to `approval_steps`; current design supports one approver per role level |
+| **More approval steps** | Add entries to `STEP_TO_ROLE_MAP` in [`config/workflow.js`](src/config/workflow.js) and update `MAX_STEP_LEVEL`; the step→role mapping is configurable, not hardcoded |
+| **Multiple approvers per level** | Step 12 already demonstrates this pattern (an array of roles + per-role approval timestamps, `Requisition.setFinalApproval`); the same approach — a joint step in `STEP_TO_ROLE_MAP` plus dedicated tracking columns — can be reused for future multi-approver steps instead of adding a generic `assigned_user_id` |
 | **File storage growth** | Move from local `uploads/` to S3-compatible storage; change only `Requisition` model |
 | **Database scaling** | Migrate from SQLite to PostgreSQL; the `sql.js` wrapper API maps cleanly to `pg` with parameterized queries (see Future Migration Path below) |
 | **Notifications** | Add email/webhook notifications in approval controller without changing workflow logic |
@@ -705,8 +774,9 @@ The current database setup is designed for easy evolution:
 
 ```bash
 cp .env.example .env    # Configure secrets
-npm install             # Install dependencies
-node server.js          # Start server
+npm install              # Install dependencies
+npm run build            # Build the React frontend into public/
+node server.js           # Start server
 ```
 
 ### Environment Variables

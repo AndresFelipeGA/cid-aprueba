@@ -177,6 +177,70 @@ const requisitionController = {
     sendFile(res, version.file_path, version.original_filename);
   },
 
+  /** GET /api/requisitions/:id/comparison-document/download — visible to anyone who can see the requisition, not just Compras. */
+  downloadComparisonDocument(req, res) {
+    const requisition = loadVisibleRequisition(req.params.id, req.user);
+    if (!requisition.comparison_file_path) {
+      throw new AppError('Esta requisición no tiene un cuadro comparativo adjunto', 404, 'COMPARISON_DOCUMENT_NOT_FOUND');
+    }
+    sendFile(res, requisition.comparison_file_path, requisition.comparison_original_filename);
+  },
+
+  // ── Closure step (12): Coordinador/a de Territorio's Listados / Actas ──
+  // At least one of the two is required to approve; guarded by requireClosureStage.
+
+  uploadClosureListing(req, res) {
+    if (!req.file) {
+      throw new AppError('El archivo es requerido', 400, 'FILE_REQUIRED');
+    }
+    const requisition = Requisition.setClosureListing(req.requisition.id, {
+      filePath: req.file.path,
+      originalFilename: req.file.originalname,
+    });
+    logger.info(`Closure listing uploaded: reqId=${req.requisition.id}, userId=${req.user.id}`);
+    res.status(201).json({ success: true, data: { requisition }, message: 'Listado subido exitosamente' });
+  },
+
+  deleteClosureListing(req, res) {
+    const requisition = Requisition.clearClosureListing(req.requisition.id);
+    logger.info(`Closure listing deleted: reqId=${req.requisition.id}, userId=${req.user.id}`);
+    res.json({ success: true, data: { requisition }, message: 'Listado eliminado exitosamente' });
+  },
+
+  downloadClosureListing(req, res) {
+    const requisition = loadVisibleRequisition(req.params.id, req.user);
+    if (!requisition.closure_listing_file_path) {
+      throw new AppError('Esta requisición no tiene un listado de cierre adjunto', 404, 'CLOSURE_LISTING_NOT_FOUND');
+    }
+    sendFile(res, requisition.closure_listing_file_path, requisition.closure_listing_original_filename);
+  },
+
+  uploadClosureMinutes(req, res) {
+    if (!req.file) {
+      throw new AppError('El archivo es requerido', 400, 'FILE_REQUIRED');
+    }
+    const requisition = Requisition.setClosureMinutes(req.requisition.id, {
+      filePath: req.file.path,
+      originalFilename: req.file.originalname,
+    });
+    logger.info(`Closure minutes uploaded: reqId=${req.requisition.id}, userId=${req.user.id}`);
+    res.status(201).json({ success: true, data: { requisition }, message: 'Acta subida exitosamente' });
+  },
+
+  deleteClosureMinutes(req, res) {
+    const requisition = Requisition.clearClosureMinutes(req.requisition.id);
+    logger.info(`Closure minutes deleted: reqId=${req.requisition.id}, userId=${req.user.id}`);
+    res.json({ success: true, data: { requisition }, message: 'Acta eliminada exitosamente' });
+  },
+
+  downloadClosureMinutes(req, res) {
+    const requisition = loadVisibleRequisition(req.params.id, req.user);
+    if (!requisition.closure_minutes_file_path) {
+      throw new AppError('Esta requisición no tiene un acta de cierre adjunta', 404, 'CLOSURE_MINUTES_NOT_FOUND');
+    }
+    sendFile(res, requisition.closure_minutes_file_path, requisition.closure_minutes_original_filename);
+  },
+
   /** GET /api/requisitions/:id/acta-consolidada.pdf — cover + every attached document merged into one PDF. */
   async downloadActaPdf(req, res) {
     const requisition = loadVisibleRequisition(req.params.id, req.user);
@@ -200,7 +264,7 @@ const requisitionController = {
     const coverPdf = await buildActaCoverPdf(full);
     res.set('Content-Type', 'application/zip');
     res.set('Content-Disposition', `attachment; filename="expediente-${full.number || full.id}.zip"`);
-    const archive = buildActaZipStream(full, coverPdf);
+    const archive = await buildActaZipStream(full, coverPdf);
     archive.pipe(res);
   },
 

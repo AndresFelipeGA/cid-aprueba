@@ -1,6 +1,6 @@
 const db = require('../config/database');
 // Step→role mapping lives in config/workflow.js (shared with the frontend via /api/meta)
-const { STEP_TO_ROLE_MAP, MAX_STEP_LEVEL, FIRST_APPROVAL_LEVEL } = require('../config/workflow');
+const { STEP_TO_ROLE_MAP, primaryRoleForStep, MAX_STEP_LEVEL, FIRST_APPROVAL_LEVEL } = require('../config/workflow');
 
 const ApprovalStep = {
   findByRequisition(requisitionId) {
@@ -32,7 +32,7 @@ const ApprovalStep = {
     db.transaction(() => {
       for (let step = 1; step <= MAX_STEP_LEVEL; step++) {
         const status = step < FIRST_APPROVAL_LEVEL ? 'approved' : 'pending';
-        insertStmt.run(requisitionId, step, status, STEP_TO_ROLE_MAP[step]);
+        insertStmt.run(requisitionId, step, status, primaryRoleForStep(step));
       }
     })();
 

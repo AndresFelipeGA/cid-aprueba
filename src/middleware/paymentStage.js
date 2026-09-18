@@ -1,7 +1,7 @@
 /**
- * Guard for the payment-proof upload: the requisition must sit at
- * PAYMENT_STEP (Área Financiera) with that step still pending, and must
- * already have a selected quotation. Attaches req.requisition and rewrites
+ * Guard for the advance payment-proof upload: the requisition must sit at
+ * PAYMENT_STEP (Tesorería) with that step still pending, and must already
+ * have a selected quotation. Attaches req.requisition and rewrites
  * req.params.quotationId so the existing quotation/document middleware
  * (loadQuotation, loadDocument) can be reused unchanged.
  *
@@ -21,7 +21,7 @@ const requirePaymentStage = (req, _res, next) => {
     throw new AppError('Requisición no encontrada', 404, 'REQUISITION_NOT_FOUND');
   }
   if (requisition.current_approval_level !== PAYMENT_STEP) {
-    throw new AppError('El comprobante de pago solo se puede adjuntar en la etapa de Aprobación Financiera', 400, 'INVALID_LEVEL');
+    throw new AppError('El comprobante de pago del anticipo solo se puede adjuntar en la etapa de Tesorería', 400, 'INVALID_LEVEL');
   }
 
   const step = ApprovalStep.findByRequisitionAndLevel(requisitionId, PAYMENT_STEP);

@@ -1,0 +1,121 @@
+/* ============================================
+   CID Aprueba — Formatting helpers
+   ============================================ */
+
+/** All requisition activity happens in Colombia; timestamps always display in this timezone. */
+const APP_TIMEZONE = 'America/Bogota';
+
+const DATE_LONG = new Intl.DateTimeFormat('es-CO', {
+  timeZone: APP_TIMEZONE,
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+const DATE_SHORT = new Intl.DateTimeFormat('es-CO', {
+  timeZone: APP_TIMEZONE,
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+const DATE_ONLY = new Intl.DateTimeFormat('es-CO', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+});
+
+/**
+ * The backend stores `created_at`/`updated_at` as SQLite's `datetime('now')`, which is
+ * UTC written *without* a timezone marker (e.g. "2026-09-18 18:40:00"). Handed to `Date`
+ * as-is, that naive string gets parsed as local time instead of UTC, shifting every
+ * timestamp forward by the viewer's UTC offset. Mark it explicitly as UTC before parsing.
+ */
+function toUtcDate(dateStr) {
+  const hasZoneMarker = /Z$|[+-]\d\d:?\d\d$/.test(dateStr);
+  const isoish = hasZoneMarker ? dateStr : `${dateStr.replace(' ', 'T')}Z`;
+  return new Date(isoish);
+}
+
+function formatWith(formatter, dateStr) {
+  if (!dateStr) return '—';
+  const date = toUtcDate(dateStr);
+  if (Number.isNaN(date.getTime())) return '—';
+  return formatter.format(date);
+}
+
+export function formatDate(dateStr) {
+  return formatWith(DATE_LONG, dateStr);
+}
+
+export function formatDateShort(dateStr) {
+  return formatWith(DATE_SHORT, dateStr);
+}
+
+/** For plain calendar dates (no time component), e.g. a "quotation issued on" date. */
+export function formatDateOnly(dateStr) {
+  if (!dateStr) return '—';
+  // Parse as a local calendar date, not UTC midnight, so it never shifts a day back/forward.
+  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  if (Number.isNaN(date.getTime())) return '—';
+  return DATE_ONLY.format(date);
+}
+
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+/** "hace 5 min" / "hace 2 h" / "hace 3 d"; falls back to formatDateShort past 7 days. */
+export function formatRelativeTime(dateStr) {
+  if (!dateStr) return '—';
+  const date = toUtcDate(dateStr);
+  if (Number.isNaN(date.getTime())) return '—';
+  const diff = Date.now() - date.getTime();
+
+  if (diff < MINUTE) return 'hace instantes';
+  if (diff < HOUR) return `hace ${Math.floor(diff / MINUTE)} min`;
+  if (diff < DAY) return `hace ${Math.floor(diff / HOUR)} h`;
+  if (diff < 7 * DAY) return `hace ${Math.floor(diff / DAY)} d`;
+  return formatDateShort(dateStr);
+}
+
+const CURRENCY_COP = new Intl.NumberFormat('es-CO', {
+  style: 'currency',
+  currency: 'COP',
+  maximumFractionDigits: 0,
+});
+
+/** Colombian pesos without decimals, e.g. "$ 1.250.000". */
+export function formatCurrency(amount) {
+  const value = Number(amount);
+  if (amount === null || amount === undefined || amount === '' || Number.isNaN(value)) return '—';
+  return CURRENCY_COP.format(value);
+}
+
+/** Signed percentage with one decimal, e.g. "+12,5 %". */
+export function formatPercent(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
+  const num = Number(value);
+  const sign = num > 0 ? '+' : '';
+  return `${sign}${num.toLocaleString('es-CO', { maximumFractionDigits: 1 })} %`;
+}
+
+export function formatBytes(bytes) {
+  if (!bytes) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+}
+
+/** Lower-cased extension without the dot ('' when none). */
+export function getFileExtension(filename) {
+  if (!filename) return '';
+  const idx = filename.lastIndexOf('.');
+  if (idx < 0) return '';
+  return filename.slice(idx + 1).toLowerCase();
+}
