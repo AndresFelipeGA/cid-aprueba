@@ -85,7 +85,7 @@ if (!requisition) {
   throw new AppError('Requisition not found', 404, 'REQUISITION_NOT_FOUND');
 }
 
-if (user.role_level !== STEP_TO_ROLE_MAP[requisition.current_approval_level]) {
+if (!rolesForStep(requisition.current_approval_level).includes(user.role_level)) {
   throw new AppError('Not authorized to approve at this level', 403, 'FORBIDDEN');
 }
 ```
@@ -507,14 +507,14 @@ Use a lightweight testing setup appropriate for the project scale:
 tests/
 ├── helpers.js            # Bootstrap: temp DB + upload dir, login/as() helpers
 ├── auth.test.js          # Login, token validation, rate limiting
-└── workflow.test.js      # Visibility rule, full 7-step chain, rejection
+└── workflow.test.js      # Visibility rule, full 12-step chain, rejection
 
 Run with `npm test` (node --test + supertest). CI runs it on every push (.github/workflows/ci.yml).
 ```
 
 ### Testing Priorities
 
-1. **Approval workflow logic** — The core business value. Test the full chain: upload → approve through all 7 steps → final status. Test rejection at each step. Note that role level 3 (Representante Legal) acts at both step 3 and step 5.
+1. **Approval workflow logic** — The core business value. Test the full chain: upload → approve through all 12 steps → final status. Test rejection at each step. Note that role level 3 (Representante Legal) acts at both step 3 and step 5, role level 4 (Encargado/a de Compras) acts at steps 4, 6, 9 and 10, and step 12 is a joint approval requiring both role 1 (Coordinador/a de Territorio) and role 4 to approve independently before the requisition closes.
 2. **Authorization rules** — Verify that users cannot approve at wrong levels, cannot access restricted requisitions.
 3. **Input validation** — Confirm that malformed requests are rejected with proper error codes.
 4. **Authentication** — Token generation, expiry, invalid token handling.
