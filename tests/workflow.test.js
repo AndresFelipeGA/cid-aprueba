@@ -675,6 +675,21 @@ describe('Approval workflow', () => {
     const { id: other } = await createRequisition('Aún sin terminar');
     assert.equal((await as(tokens.revisor).get(`/api/requisitions/${other}/acta-consolidada.pdf`)).status, 403);
   });
+
+  it('generates the acta even when a comment contains an emoji (pdf-lib cannot encode it, so it must be stripped, not thrown)', async () => {
+    const { id } = await createRequisition('Acta con emoji 🎉');
+    await approve('director', id, { comments: '¡Todo bien! 👍 — “aprobado”' });
+    await approve('legal', id);
+    await addCompleteQuotation(id, 'Proveedor Emoji', 500000);
+    await approve('compras', id);
+    await approve('legal', id);
+    await approve('compras', id);
+    await finishFromStep7(id);
+
+    const pdf = await as(tokens.revisor).get(`/api/requisitions/${id}/acta-consolidada.pdf`).buffer(true).parse(binaryParser);
+    assert.equal(pdf.status, 200);
+    assert.equal(pdf.body.slice(0, 4).toString(), '%PDF');
+  });
 });
 
 function binaryParser(res, callback) {

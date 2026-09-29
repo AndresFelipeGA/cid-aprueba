@@ -190,7 +190,8 @@ User management (CRUD operations on user accounts) is restricted to **Representa
 
 - Store uploads **outside** the public directory
 - Generate unique filenames (UUID) — never use the original filename for storage
-- Validate file extensions against an allowlist: `.pdf`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.jpg`, `.png`
+- Validate file extensions against an allowlist — currently `.pdf` only (see `ALLOWED_UPLOAD_EXTENSIONS` in `config/workflow.js`)
+- Don't trust the extension alone: verify the file's real signature/magic bytes server-side (`middleware/upload.js` checks for `%PDF-`) — an attacker can rename any file to `.pdf`
 - Enforce maximum file size (default: 10 MB)
 - Serve files through an authenticated download endpoint, not as static assets
 

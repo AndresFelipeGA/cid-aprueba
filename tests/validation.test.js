@@ -79,4 +79,40 @@ describe('Validation, authorization wiring and upload hygiene', () => {
     assert.equal(res.status, 400);
     assert.equal(res.body.error, 'FILE_TOO_LARGE');
   });
+
+  it('rejects a file whose content is not really a PDF, even if named *.pdf', async () => {
+    const notActuallyAPdf = Buffer.from('<html>not a pdf</html>');
+    const res = await as(tokens.coord).post('/api/requisitions')
+      .field('title', 'Disfrazado').attach('file', notActuallyAPdf, 'fake.pdf');
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error, 'INVALID_FILE_CONTENT');
+
+    const uploadDir = path.resolve(process.env.UPLOAD_DIR);
+    const orphaned = fs.readdirSync(uploadDir).some((f) => f.endsWith('.pdf') && fs.statSync(path.join(uploadDir, f)).size < 100);
+    assert.ok(!orphaned, 'the fake PDF should have been deleted, not left on disk');
+  });
+
+  it('rejects non-PDF extensions outright', async () => {
+    const res = await as(tokens.coord).post('/api/requisitions')
+      .field('title', 'Word').attach('file', Buffer.from('hola'), 'documento.docx');
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error, 'INVALID_FILE_TYPE');
+  });
+
+  it('prefixes CSV cells that look like formulas so Excel/Sheets treats them as text', async () => {
+    const { toCsv } = require('../src/utils/csv');
+    const csv = toCsv([{ key: 'title', header: 'Título' }], [
+      { title: '=SUM(A1:A9)' },
+      { title: '+1+1' },
+      { title: '-1' },
+      { title: '@SUM(A1)' },
+      { title: 'Título normal' },
+    ]);
+    const lines = csv.split('\r\n').slice(1);
+    assert.ok(lines[0].startsWith("'="));
+    assert.ok(lines[1].startsWith("'+"));
+    assert.ok(lines[2].startsWith("'-"));
+    assert.ok(lines[3].startsWith("'@"));
+    assert.equal(lines[4], 'Título normal');
+  });
 });

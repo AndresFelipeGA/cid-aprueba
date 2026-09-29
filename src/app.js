@@ -30,10 +30,13 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-// CORS
+// CORS — the frontend is served from this same app (same-origin), so browsers never
+// consult this for its own traffic. It only matters for a future separate frontend/API
+// origin, so default to denying cross-origin entirely in production rather than a
+// hardcoded guess that could silently be wrong.
 app.use(cors({
   origin: config.nodeEnv === 'production'
-    ? process.env.ALLOWED_ORIGIN || 'http://localhost:3000'
+    ? process.env.ALLOWED_ORIGIN || false
     : '*',
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],

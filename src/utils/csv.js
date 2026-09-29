@@ -9,7 +9,11 @@ const SEPARATOR = ';';
 
 const escapeCell = (value) => {
   if (value === null || value === undefined) return '';
-  const str = String(value);
+  let str = String(value);
+  // CSV/formula injection: a cell starting with = + - @ is read as a formula by
+  // Excel/Sheets on open. Prefix with an apostrophe (Excel treats it as forcing
+  // text; the character itself doesn't show up in the cell).
+  if (/^[=+\-@]/.test(str)) str = `'${str}`;
   return /[";\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 };
 

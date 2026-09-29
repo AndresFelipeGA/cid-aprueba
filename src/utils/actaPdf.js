@@ -32,9 +32,25 @@ async function embedLogo(doc, width = 90) {
   return { img, width, height: img.height * scale };
 }
 
+/**
+ * pdf-lib's standard fonts only encode WinAnsi (roughly Latin-1): any emoji or other
+ * character outside it makes `widthOfTextAtSize`/`drawText` throw, breaking acta
+ * generation for the requisition forever until someone edits the offending text in
+ * the DB by hand. User-supplied text (titles, comments, filenames...) always funnels
+ * through here before being measured or drawn, so this is the one place it's sanitized.
+ */
+const SMART_CHAR_MAP = {
+  '‘': "'", '’': "'", '“': '"', '”': '"', '–': '-', '—': '-', '…': '...',
+};
+function sanitizePdfText(value) {
+  const str = String(value ?? '');
+  const mapped = str.replace(/[‘’“”–—…]/g, (c) => SMART_CHAR_MAP[c]);
+  return mapped.replace(/[^\x00-\xFF]/g, '');
+}
+
 /** Trims text with an ellipsis so it fits `maxWidth` at `size`. */
 function truncate(font, text, size, maxWidth) {
-  const str = String(text);
+  const str = sanitizePdfText(text);
   if (font.widthOfTextAtSize(str, size) <= maxWidth) return str;
   let t = str;
   while (t.length > 1 && font.widthOfTextAtSize(`${t}…`, size) > maxWidth) t = t.slice(0, -1);
@@ -71,7 +87,7 @@ const COMPLETION_ACTIONS = new Set(['approved', 'uploaded', 'resubmitted']);
 
 /** Minimal word-wrap for a fixed-width text block. */
 function wrapText(font, text, size, maxWidth) {
-  const words = String(text).split(/\s+/);
+  const words = sanitizePdfText(text).split(/\s+/);
   const lines = [];
   let current = '';
   for (const word of words) {
@@ -323,7 +339,7 @@ async function buildActaCoverPdf(requisition) {
 async function appendFile(doc, font, bold, sectionTitle, filePath, originalFilename) {
   const page = doc.addPage(PAGE_SIZE);
   page.drawText(sectionTitle, { x: MARGIN, y: PAGE_SIZE[1] - MARGIN - 20, size: 14, font: bold, color: rgb(0.24, 0.35, 0.12) });
-  page.drawText(originalFilename || '', { x: MARGIN, y: PAGE_SIZE[1] - MARGIN - 42, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+  page.drawText(sanitizePdfText(originalFilename), { x: MARGIN, y: PAGE_SIZE[1] - MARGIN - 42, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
 
   const resolved = path.resolve(filePath);
   if (!fs.existsSync(resolved)) {

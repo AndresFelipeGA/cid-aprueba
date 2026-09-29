@@ -164,7 +164,8 @@ const CLOSURE_DOC_LABELS = Object.freeze({
   minutes: 'Actas',
 });
 
-const ALLOWED_UPLOAD_EXTENSIONS = Object.freeze(['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png']);
+/** PDF-only for now across every upload flow — simplest to validate reliably (real file signature, not just extension) and easiest for reviewers to open consistently. */
+const ALLOWED_UPLOAD_EXTENSIONS = Object.freeze(['.pdf']);
 
 module.exports = {
   STEP_TO_ROLE_MAP,

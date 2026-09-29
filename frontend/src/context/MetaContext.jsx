@@ -59,7 +59,7 @@ export function MetaProvider({ children }) {
     const closureStep = () => m.closure_step || 12;
     const closureRoles = () => m.closure_roles || [1, 4];
     const closureDocLabels = () => m.closure_doc_labels || { listing: 'Listados', minutes: 'Actas' };
-    const acceptAttr = () => (m.allowed_extensions || ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png']).join(',');
+    const acceptAttr = () => (m.allowed_extensions || ['.pdf']).join(',');
     const statusLabels = () => m.status_labels || {};
     const statusLabel = (status) => statusLabels()[status] || status;
     const actionLabel = (action) => (m.log_actions || {})[action] || action;
