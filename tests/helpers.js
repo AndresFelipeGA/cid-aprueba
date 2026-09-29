@@ -26,7 +26,8 @@ const SEED_PASSWORD = 'cid2024';
 
 /** Seeded usernames by role level. Role 3 acts at steps 3 and 5. */
 const USERS = {
-  coord: 'coord.territorio',   // role 1
+  coord: 'coord.territorio',   // role 1, territory Chocó
+  coord2: 'coord.territorio2', // role 1, territory Santander (different territory than `coord`)
   director: 'dir.programatica', // role 2
   legal: 'rep.legal',           // role 3
   compras: 'enc.compras',       // role 4
@@ -48,11 +49,11 @@ async function start() {
   return app;
 }
 
-/** Log in a seeded user and return a Bearer token. */
-async function login(username) {
+/** Log in a seeded (or test-created) user and return a Bearer token. */
+async function login(username, password = SEED_PASSWORD) {
   const res = await request(app)
     .post('/api/auth/login')
-    .send({ username, password: SEED_PASSWORD });
+    .send({ username, password });
   if (!res.body.success) {
     throw new Error(`Login failed for ${username}: ${res.body.message}`);
   }

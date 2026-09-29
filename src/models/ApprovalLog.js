@@ -24,7 +24,8 @@ const ApprovalLog = {
     `).all(requisitionId);
   },
 
-  findRecent({ limit = 20 } = {}) {
+  /** Recent activity visible to `visibility` (e.g. `Requisition.visibilityClause(user)`) — dashboard feed. */
+  findRecent(visibility, { limit = 20 } = {}) {
     return db.prepare(`
       SELECT al.*, u.full_name AS user_name, u.username,
              r.title AS requisition_title, r.number AS requisition_number,
@@ -33,9 +34,10 @@ const ApprovalLog = {
       JOIN users u ON al.user_id = u.id
       JOIN requisitions r ON al.requisition_id = r.id
       LEFT JOIN projects p ON r.project_id = p.id
+      WHERE ${visibility.sql}
       ORDER BY al.created_at DESC, al.id DESC
       LIMIT ?
-    `).all(limit);
+    `).all(...visibility.params, limit);
   },
 
   /** Full audit trail for the requisitions visible to a user (for CSV export). */

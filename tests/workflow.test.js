@@ -106,6 +106,55 @@ describe('Approval workflow', () => {
     assert.equal((await detail('director', id)).status, 200);
   });
 
+  it('hides a requisition from a coordinator of a different territory, even at the joint closure step', async () => {
+    const { id } = await createRequisition('Territorio ajeno');
+
+    // coord2 (Santander) cannot see coord's (Chocó) requisition, in the list or the detail...
+    assert.equal((await detail('coord2', id)).status, 403);
+    const listAsCoord2 = await as(tokens.coord2).get('/api/requisitions');
+    assert.ok(!listAsCoord2.body.data.items.some((r) => r.id === id));
+    assert.equal((await as(tokens.coord2).get(`/api/approvals/${id}/history`)).status, 403);
+
+    // ...nor once it reaches the final, joint-approval step where role 1 acts.
+    await approve('director', id);
+    await approve('legal', id);
+    await addCompleteQuotation(id, 'Proveedor Territorio', 500000);
+    await approve('compras', id);
+    await approve('legal', id);
+    await approve('compras', id);
+    await approve('financiera', id);
+    await as(tokens.revisor).post(`/api/requisitions/${id}/payment-document`).attach('file', PDF, 'anticipo.pdf');
+    await approve('revisor', id);
+    await approve('compras', id);
+    await approve('compras', id);
+    await as(tokens.revisor).post(`/api/requisitions/${id}/final-payment-document`).attach('file', PDF, 'saldo.pdf');
+    await approve('revisor', id); // step 12, joint: role 1 (any territory) + role 4
+
+    assert.equal((await detail('coord2', id)).status, 403);
+    const forbiddenApprove = await approve('coord2', id);
+    assert.equal(forbiddenApprove.status, 403);
+    assert.equal(forbiddenApprove.body.error, 'FORBIDDEN');
+
+    // coord (Chocó, the actual uploader) can still see and act on it normally.
+    assert.equal((await detail('coord', id)).status, 200);
+  });
+
+  it('lets a coordinator see a requisition uploaded by a different coordinator in the same territory', async () => {
+    const { id } = await createRequisition('Mismo territorio');
+
+    // A second coordinator seeded in the *same* territory as `coord` (Chocó) — not the uploader.
+    const created = await as(tokens.legal).post('/api/users').send({
+      username: 'coord.choco2', email: 'coord.choco2@cid.org.co', password: 'cid20242024',
+      full_name: 'Coordinador/a de Territorio (Chocó 2)', role_level: 1, territory: 'Chocó',
+    });
+    assert.equal(created.status, 201, created.body.message);
+    const sameTerritoryToken = await login('coord.choco2', 'cid20242024');
+
+    assert.equal((await as(sameTerritoryToken).get(`/api/requisitions/${id}`)).status, 200);
+    const list = await as(sameTerritoryToken).get('/api/requisitions');
+    assert.ok(list.body.data.items.some((r) => r.id === id));
+  });
+
   it('refuses approval from a role that does not own the current step', async () => {
     const { id } = await createRequisition('Rol incorrecto');
     const res = await approve('financiera', id);

@@ -131,12 +131,25 @@ function DocRow({ docType, doc, canEdit, optional, onPreview, onAttachDoc, onDel
 }
 
 function QuotationCard({ requisition, quotation, canEdit, onPreview, onDelete, onAttachDoc, onDeleteDoc }) {
-  const { docTypes, optionalDocTypes, paymentStep, paymentDocType, paymentDocLabel } = useMeta();
+  const {
+    docTypes, optionalDocTypes, paymentStep, paymentDocType, paymentDocLabel,
+    finalPurchaseStep, finalPurchaseDocTypes, deliveryStep, deliveryDocTypes,
+    finalPaymentStep, finalPaymentDocType, finalPaymentDocLabel,
+  } = useMeta();
   const docs = quotation.documents || [];
   const isSelected = quotation.status === 'selected';
   const isAtPaymentStep = requisition.current_approval_level === paymentStep() && isOpen(requisition);
   const paymentDoc = docs.find((d) => d.doc_type === paymentDocType());
   const paymentTerms = paymentTermsLabel(quotation.advance_percent);
+
+  // Once past its own step, each closing-document set becomes a read-only recap here —
+  // its dedicated panel (with edit controls) only renders while its step is the current one.
+  const isAtFinalPurchaseStep = requisition.current_approval_level === finalPurchaseStep() && isOpen(requisition);
+  const isAtDeliveryStep = requisition.current_approval_level === deliveryStep() && isOpen(requisition);
+  const isAtFinalPaymentStep = requisition.current_approval_level === finalPaymentStep() && isOpen(requisition);
+  const finalPurchaseDocs = isAtFinalPurchaseStep ? [] : finalPurchaseDocTypes().filter((dt) => docs.some((d) => d.doc_type === dt.key));
+  const attachedDeliveryDocs = isAtDeliveryStep ? [] : deliveryDocTypes().filter((dt) => docs.some((d) => d.doc_type === dt.key));
+  const finalPaymentDoc = docs.find((d) => d.doc_type === finalPaymentDocType());
 
   return (
     <div className={`quotation-card${isSelected ? ' quotation-card--selected' : ''}`}>
@@ -206,6 +219,55 @@ function QuotationCard({ requisition, quotation, canEdit, onPreview, onDelete, o
           />
         ))}
       </div>
+      {finalPurchaseDocs.length > 0 && (
+        <div className="quotation-card__documents">
+          <div className="quotation-card__documents-title">Documentos de cierre de compra:</div>
+          {finalPurchaseDocs.map((docType) => (
+            <DocRow
+              key={docType.key}
+              docType={docType}
+              doc={docs.find((d) => d.doc_type === docType.key)}
+              canEdit={false}
+              optional
+              onPreview={(filename, docId) => onPreview(filename, docId, quotation.id)}
+            />
+          ))}
+        </div>
+      )}
+      {attachedDeliveryDocs.length > 0 && (
+        <div className="quotation-card__documents">
+          <div className="quotation-card__documents-title">Documentos de entrega:</div>
+          {attachedDeliveryDocs.map((docType) => (
+            <DocRow
+              key={docType.key}
+              docType={docType}
+              doc={docs.find((d) => d.doc_type === docType.key)}
+              canEdit={false}
+              optional
+              onPreview={(filename, docId) => onPreview(filename, docId, quotation.id)}
+            />
+          ))}
+        </div>
+      )}
+      {finalPaymentDoc && !isAtFinalPaymentStep && (
+        <div className="quotation-card__documents">
+          <div className="quotation-card__documents-title">Pago final:</div>
+          <div className="quotation-card__doc-item">
+            <span
+              className="quotation-card__doc-status quotation-card__doc-status--complete quotation-card__doc-filename"
+              role="button"
+              tabIndex={0}
+              title="Clic para vista previa"
+              onClick={() => onPreview(finalPaymentDoc.original_filename, finalPaymentDoc.id, quotation.id)}
+            >
+              ✅ {finalPaymentDocLabel()}: {finalPaymentDoc.original_filename}
+            </span>
+            <div className="quotation-card__actions">
+              <button className="btn btn--outline btn--sm" onClick={() => onPreview(finalPaymentDoc.original_filename, finalPaymentDoc.id, quotation.id)}>Ver</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

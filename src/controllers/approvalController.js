@@ -40,6 +40,9 @@ const loadActionable = (requisitionId, user) => {
   if (allowedRoles.length === 0 || !allowedRoles.includes(user.role_level)) {
     throw new AppError('No autorizado para actuar en este nivel', 403, 'FORBIDDEN');
   }
+  if (!Requisition.isVisibleTo(requisition, user)) {
+    throw new AppError('No autorizado para ver esta requisición', 403, 'FORBIDDEN');
+  }
 
   const step = ApprovalStep.findByRequisitionAndLevel(requisitionId, requisition.current_approval_level);
   if (!step) {

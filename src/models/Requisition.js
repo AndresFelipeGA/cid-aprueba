@@ -5,6 +5,9 @@ const { STEP_TO_ROLE_MAP, rolesForStep, FIRST_APPROVAL_LEVEL } = require('../con
 const FINAL_STATUSES = ['approved', 'rejected'];
 const OPEN_STATUSES = ['pending', 'in_review', 'returned'];
 
+/** Multiple coordinators can share a territory; each may only see/act on their own territory's work. */
+const COORDINATOR_ROLE = 1;
+
 const SELECT_WITH_JOINS = `
   SELECT r.*, u.full_name AS uploader_name, u.username AS uploader_username, u.territory AS uploader_territory,
          p.name AS project_name, p.code AS project_code,
@@ -28,11 +31,22 @@ const minStepForRole = (roleLevel) => {
 };
 
 /** SQL fragment + params implementing the visibility rule for a user. `alias` is the requisitions alias. */
-const visibilityClause = (user, alias = 'r') => ({
-  sql: `(${alias}.current_approval_level >= ? OR ${alias}.status IN ('approved', 'rejected')
-         OR EXISTS (SELECT 1 FROM approval_logs vl WHERE vl.requisition_id = ${alias}.id AND vl.user_id = ?))`,
-  params: [minStepForRole(user.role_level), user.id],
-});
+const visibilityClause = (user, alias = 'r') => {
+  const sql = `(${alias}.current_approval_level >= ? OR ${alias}.status IN ('approved', 'rejected')
+         OR EXISTS (SELECT 1 FROM approval_logs vl WHERE vl.requisition_id = ${alias}.id AND vl.user_id = ?))`;
+  const params = [minStepForRole(user.role_level), user.id];
+
+  if (user.role_level === COORDINATOR_ROLE) {
+    return {
+      sql: `${sql} AND (${alias}.uploaded_by = ? OR EXISTS (
+              SELECT 1 FROM users cu WHERE cu.id = ${alias}.uploaded_by AND cu.territory = ?
+            ))`,
+      params: [...params, user.id, user.territory],
+    };
+  }
+
+  return { sql, params };
+};
 
 const hasActedOn = (requisitionId, userId) => !!db.prepare(
   'SELECT 1 FROM approval_logs WHERE requisition_id = ? AND user_id = ? LIMIT 1',
@@ -49,9 +63,16 @@ const Requisition = {
    * @param {{ id: number, role_level: number }} user
    */
   isVisibleTo(requisition, user) {
-    return FINAL_STATUSES.includes(requisition.status)
+    const generallyVisible = FINAL_STATUSES.includes(requisition.status)
       || requisition.current_approval_level >= minStepForRole(user.role_level)
       || hasActedOn(requisition.id, user.id);
+    if (!generallyVisible) return false;
+
+    if (user.role_level === COORDINATOR_ROLE) {
+      return requisition.uploaded_by === user.id
+        || Boolean(requisition.uploader_territory) && requisition.uploader_territory === user.territory;
+    }
+    return true;
   },
 
   findById(id) {
@@ -325,10 +346,12 @@ const Requisition = {
   },
 
   /**
-   * Requisitions waiting on a role: open ones sitting at any step that role owns.
-   * For role 1 this means requisitions returned to step 1 awaiting a new version.
+   * Requisitions waiting on a user's role: open ones sitting at any step that role owns.
+   * For role 1 this means requisitions returned to step 1 awaiting a new version — and,
+   * since multiple coordinators can share a territory, only their own territory's work.
    */
-  findPendingForRole(roleLevel, { limit = 20, offset = 0 } = {}) {
+  findPendingForRole(user, { limit = 20, offset = 0 } = {}) {
+    const roleLevel = user.role_level;
     const steps = Object.keys(STEP_TO_ROLE_MAP)
       .map((step) => parseInt(step, 10))
       .filter((step) => rolesForStep(step).includes(roleLevel));
@@ -336,22 +359,30 @@ const Requisition = {
     // At the joint closure step, a role that already recorded its half no longer has anything pending there.
     const closureColumn = roleLevel === 4 ? 'final_compras_approved_at' : roleLevel === 1 ? 'final_coordinador_approved_at' : null;
     const closureGuard = closureColumn ? ` AND (r.current_approval_level != 12 OR r.${closureColumn} IS NULL)` : '';
-    const where = `r.current_approval_level IN (${placeholders}) AND r.status IN ('pending', 'in_review', 'returned')${closureGuard}`;
+    const territoryGuard = roleLevel === COORDINATOR_ROLE
+      ? ' AND (r.uploaded_by = ? OR EXISTS (SELECT 1 FROM users cu WHERE cu.id = r.uploaded_by AND cu.territory = ?))'
+      : '';
+    const territoryParams = roleLevel === COORDINATOR_ROLE ? [user.id, user.territory] : [];
+    const where = `r.current_approval_level IN (${placeholders}) AND r.status IN ('pending', 'in_review', 'returned')${closureGuard}${territoryGuard}`;
 
     const items = db.prepare(`
       ${SELECT_WITH_JOINS} WHERE ${where}
       ORDER BY r.updated_at ASC LIMIT ? OFFSET ?
-    `).all(...steps, limit, offset);
+    `).all(...steps, ...territoryParams, limit, offset);
 
     const { total } = db.prepare(
       `SELECT COUNT(*) as total FROM requisitions r WHERE ${where}`,
-    ).get(...steps);
+    ).get(...steps, ...territoryParams);
 
     return { items, total };
   },
 
-  findRecent({ limit = 10 } = {}) {
-    return db.prepare(`${SELECT_WITH_JOINS} ORDER BY r.updated_at DESC LIMIT ?`).all(limit);
+  /** Most recently updated requisitions visible to `user` (dashboard "recent" widget). */
+  findRecent(user, { limit = 10 } = {}) {
+    const vis = visibilityClause(user);
+    return db.prepare(
+      `${SELECT_WITH_JOINS} WHERE ${vis.sql} ORDER BY r.updated_at DESC LIMIT ?`,
+    ).all(...vis.params, limit);
   },
 };
 

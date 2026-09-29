@@ -7,7 +7,7 @@ const dashboardController = {
   getStats(req, res) {
     const statusCounts = Requisition.countByStatus();
     const levelCounts = Requisition.countByLevel();
-    const recentActivity = ApprovalLog.findRecent({ limit: 10 });
+    const recentActivity = ApprovalLog.findRecent(Requisition.visibilityClause(req.user), { limit: 10 });
 
     // Build by_status object for charts
     const byStatus = {
@@ -50,10 +50,9 @@ const dashboardController = {
   },
 
   getPending(req, res) {
-    const userRoleLevel = req.user.role_level;
     const { page, limit, offset } = getPagination(req);
 
-    const { items, total } = Requisition.findPendingForRole(userRoleLevel, { limit, offset });
+    const { items, total } = Requisition.findPendingForRole(req.user, { limit, offset });
 
     res.json({
       success: true,
@@ -69,7 +68,7 @@ const dashboardController = {
 
   getRecent(req, res) {
     const { limit } = getPagination(req, 10);
-    const items = Requisition.findRecent({ limit });
+    const items = Requisition.findRecent(req.user, { limit });
 
     res.json({
       success: true,
