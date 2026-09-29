@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(grep -n \"draw\\(\\\\`\" src/utils/actaPdf.js)",
-      "Bash(grep -n \"^  const draw\" src/utils/actaPdf.js)"
+      "Bash(grep -n \"^  const draw\" src/utils/actaPdf.js)",
+      "Bash(rm -f /home/andres-gonzalez/Documents/GitHub/cid-aprueba/inspect-closure-docs.mjs /tmp/closure-docs-compras.png)",
+      "Bash(git commit -m ' *)",
+      "Read(//tmp/**)",
+      "Bash(ls -la /tmp/popup-success.png /tmp/popup-warning.png 2>&1)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
     ]
   }
 }
