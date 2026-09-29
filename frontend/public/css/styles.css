@@ -4232,9 +4232,25 @@ body,
   width: 32px;
 }
 
+/* Fixed column widths so long comments get real room to wrap instead of being squeezed
+   by the browser's auto layout (which otherwise sizes columns off the shortest content). */
+.acta__table--steps {
+  table-layout: fixed;
+}
+
+.acta__table--steps th:nth-child(1), .acta__table--steps td:nth-child(1) { width: 5%; }
+.acta__table--steps th:nth-child(2), .acta__table--steps td:nth-child(2) { width: 19%; }
+.acta__table--steps th:nth-child(3), .acta__table--steps td:nth-child(3) { width: 15%; }
+.acta__table--steps th:nth-child(4), .acta__table--steps td:nth-child(4) { width: 15%; }
+.acta__table--steps th:nth-child(5), .acta__table--steps td:nth-child(5) { width: 13%; }
+.acta__table--steps th:nth-child(6), .acta__table--steps td:nth-child(6) { width: 33%; }
+
 .acta__comments {
   font-style: italic;
   color: #333;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
 }
 
 .acta__amount {

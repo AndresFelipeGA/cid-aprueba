@@ -36,7 +36,7 @@ function StepsTable({ steps, logs }) {
     );
   }
   return (
-    <table className="acta__table">
+    <table className="acta__table acta__table--steps">
       <thead><tr><th>#</th><th>Paso</th><th>Rol</th><th>Aprobado por</th><th>Fecha</th><th>Comentarios</th></tr></thead>
       <tbody>{rows}</tbody>
     </table>
