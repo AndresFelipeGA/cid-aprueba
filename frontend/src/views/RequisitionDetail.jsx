@@ -27,7 +27,6 @@ const APPROVAL_OPTIONS = {
     btnClass: 'btn--secondary',
     busy: 'Aprobando...',
     placeholder: 'Comentarios opcionales para la aprobación',
-    resultIcon: '✅',
     resultTone: 'success',
     resultTitle: '¡Aprobado!',
   },
@@ -37,7 +36,6 @@ const APPROVAL_OPTIONS = {
     busy: 'Devolviendo...',
     placeholder: 'Explique el motivo de la devolución (obligatorio)',
     confirm: 'La requisición volverá al paso anterior para que sea revisada nuevamente. ¿Desea continuar?',
-    resultIcon: '↩️',
     resultTone: 'warning',
     resultTitle: 'Devuelta',
   },
@@ -48,7 +46,6 @@ const APPROVAL_OPTIONS = {
     busy: 'Devolviendo...',
     placeholder: 'Explique qué debe corregirse en la nueva versión (obligatorio)',
     confirm: 'La requisición volverá al inicio y el/la coordinador/a deberá radicar una nueva versión del documento. ¿Desea continuar?',
-    resultIcon: '↩️',
     resultTone: 'warning',
     resultTitle: 'Devuelta al inicio',
   },
@@ -58,11 +55,38 @@ const APPROVAL_OPTIONS = {
     busy: 'Rechazando...',
     placeholder: 'Explique el motivo del rechazo (obligatorio)',
     confirm: 'El rechazo es definitivo: la requisición quedará cerrada y no podrá continuar. ¿Desea continuar?',
-    resultIcon: '⛔',
     resultTone: 'danger',
     resultTitle: 'Rechazada',
   },
 };
+
+/** Tone-matched icon for the post-action popup: a check, an undo arrow, or an X — each hand-drawn as an animated SVG stroke. */
+function ResultIcon({ tone }) {
+  if (tone === 'warning') {
+    return (
+      <svg className="approval-result-dialog__svg" viewBox="0 0 52 52" fill="none" aria-hidden="true">
+        <circle className="approval-result-dialog__ring" cx="26" cy="26" r="24" />
+        <path className="approval-result-dialog__mark" d="M33 18 L20 26 L33 34" strokeLinecap="round" strokeLinejoin="round" />
+        <path className="approval-result-dialog__mark approval-result-dialog__mark--delay" d="M20 26 H36" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (tone === 'danger') {
+    return (
+      <svg className="approval-result-dialog__svg" viewBox="0 0 52 52" fill="none" aria-hidden="true">
+        <circle className="approval-result-dialog__ring" cx="26" cy="26" r="24" />
+        <path className="approval-result-dialog__mark" d="M17 17 L35 35" strokeLinecap="round" />
+        <path className="approval-result-dialog__mark approval-result-dialog__mark--delay" d="M35 17 L17 35" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="approval-result-dialog__svg" viewBox="0 0 52 52" fill="none" aria-hidden="true">
+      <circle className="approval-result-dialog__ring" cx="26" cy="26" r="24" />
+      <path className="approval-result-dialog__mark" d="M15 27 L22 34 L38 18" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 function hasAllDocs(quotation, docTypes) {
   const docs = quotation.documents || [];
@@ -1116,7 +1140,7 @@ function ApprovalPanel({ requisition, quotations, onPreview, onReload }) {
         apiResult = await API.returnRequisition(requisition.id, option === 'return_start' ? 'start' : 'previous', trimmedComments);
       }
       const message = apiResult.message || 'Acción registrada';
-      setResult({ message, icon: opt.resultIcon, tone: opt.resultTone, title: opt.resultTitle });
+      setResult({ message, tone: opt.resultTone, title: opt.resultTitle });
     } catch (err) {
       setFeedback({ type: 'error', message: err.message || 'Error al registrar la acción' });
       setBusy(false);
@@ -1211,7 +1235,9 @@ function ApprovalPanel({ requisition, quotations, onPreview, onReload }) {
       >
         {result && (
           <div className="approval-result-dialog__content">
-            <div className="approval-result-dialog__icon">{result.icon}</div>
+            <div className="approval-result-dialog__icon">
+              <ResultIcon tone={result.tone} />
+            </div>
             <h3 className="approval-result-dialog__title" id="approval-result-title">{result.title}</h3>
             <p className="modal__text">{result.message}</p>
             <div className="modal__actions">

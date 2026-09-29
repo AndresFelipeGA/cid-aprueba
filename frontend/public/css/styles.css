@@ -1620,6 +1620,8 @@ textarea.form__input {
 
 /* --- Approval result dialog (blocks accidental double-clicks between steps) --- */
 .approval-result-dialog {
+  --tone: var(--color-accent);
+  --tone-soft: rgba(107, 142, 35, 0.12);
   position: fixed;
   top: 50%;
   left: 50%;
@@ -1630,69 +1632,136 @@ textarea.form__input {
   background: var(--color-surface);
   color: var(--color-text);
   box-shadow: var(--shadow-lg);
-  padding: 32px;
+  padding: 36px 32px 32px;
   width: calc(100% - 32px);
   max-width: 420px;
   text-align: center;
+  overflow: visible;
 }
+
+.approval-result-dialog--warning { --tone: var(--color-warning-dark); --tone-soft: rgba(230, 168, 23, 0.16); }
+.approval-result-dialog--danger { --tone: var(--color-danger); --tone-soft: rgba(178, 34, 34, 0.12); }
 
 .approval-result-dialog::backdrop {
   background-color: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(2px);
+  animation: modal-fade-in 0.18s var(--ease);
 }
 
 .approval-result-dialog__content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  animation: modal-scale-in 0.22s var(--ease);
+  animation: result-pop-in 0.42s cubic-bezier(0.22, 1.4, 0.36, 1);
 }
 
 .approval-result-dialog__icon {
-  font-size: 2.5rem;
-  line-height: 1;
-  margin-bottom: 12px;
-  width: 64px;
-  height: 64px;
+  position: relative;
+  margin-bottom: 16px;
+  width: 72px;
+  height: 72px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background-color: rgba(107, 142, 35, 0.12);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--tone-soft) 70%, transparent), var(--tone-soft));
 }
 
-.approval-result-dialog--warning .approval-result-dialog__icon {
-  background-color: rgba(230, 168, 23, 0.16);
+.approval-result-dialog__icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--tone);
+  opacity: 0.5;
+  animation: result-ring-pulse 0.7s ease-out 0.15s;
 }
 
-.approval-result-dialog--danger .approval-result-dialog__icon {
-  background-color: rgba(178, 34, 34, 0.1);
+.approval-result-dialog__svg {
+  width: 40px;
+  height: 40px;
+  position: relative;
+  z-index: 1;
+}
+
+.approval-result-dialog__ring {
+  stroke: var(--tone);
+  stroke-width: 2.5;
+  opacity: 0.3;
+  stroke-dasharray: 151;
+  stroke-dashoffset: 151;
+  animation: result-draw 0.5s var(--ease) forwards;
+}
+
+.approval-result-dialog__mark {
+  stroke: var(--tone);
+  stroke-width: 4;
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: result-draw 0.35s ease-out 0.3s forwards;
+}
+
+.approval-result-dialog__mark--delay {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: result-draw 0.25s ease-out 0.5s forwards;
 }
 
 .approval-result-dialog__title {
   font-size: 1.15rem;
   font-weight: 700;
   margin-bottom: 8px;
-  color: var(--color-accent);
-}
-
-.approval-result-dialog--warning .approval-result-dialog__title {
-  color: var(--color-warning-dark);
-}
-
-.approval-result-dialog--danger .approval-result-dialog__title {
-  color: var(--color-danger);
+  color: var(--tone);
+  opacity: 0;
+  animation: result-fade-up 0.35s var(--ease) 0.25s forwards;
 }
 
 .approval-result-dialog .modal__text {
   font-size: 0.95rem;
   color: var(--color-text);
   text-align: center;
+  opacity: 0;
+  animation: result-fade-up 0.35s var(--ease) 0.32s forwards;
 }
 
 .approval-result-dialog .modal__actions {
   justify-content: center;
   width: 100%;
+  opacity: 0;
+  animation: result-fade-up 0.35s var(--ease) 0.4s forwards;
+}
+
+@keyframes result-pop-in {
+  from { opacity: 0; transform: scale(0.85) translateY(6px); }
+}
+
+@keyframes result-ring-pulse {
+  from { transform: scale(0.8); opacity: 0.6; }
+  to { transform: scale(1.35); opacity: 0; }
+}
+
+@keyframes result-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes result-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .approval-result-dialog__content,
+  .approval-result-dialog__icon::before,
+  .approval-result-dialog__ring,
+  .approval-result-dialog__mark,
+  .approval-result-dialog__mark--delay,
+  .approval-result-dialog__title,
+  .approval-result-dialog .modal__text,
+  .approval-result-dialog .modal__actions {
+    animation: none;
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
 }
 
 /* --- Profile Page --- */
